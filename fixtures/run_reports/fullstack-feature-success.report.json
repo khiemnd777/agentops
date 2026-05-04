@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run_20260504_001",
+  "project_slug": "demo",
+  "task": {
+    "title": "Add role filter to user API and update FE list page",
+    "input_summary": "Add role-based filtering support to the user API and update the frontend user list page."
+  },
+  "workflow": {
+    "expected_id": "fullstack-feature-workflow",
+    "expected_version": "1.0.0",
+    "actual_id": "fullstack-feature-workflow",
+    "actual_version": "1.0.0"
+  },
+  "status": "completed",
+  "started_at": "2026-05-04T10:00:00Z",
+  "finished_at": "2026-05-04T10:04:20Z",
+  "change_summary": [
+    "Added role filter support to the API query layer.",
+    "Updated frontend user list filter state.",
+    "Validated API/client contract consistency.",
+    "Checked RBAC route safety."
+  ],
+  "final_summary": "The role filter feature was implemented across backend and frontend with contract and RBAC checks completed.",
+  "nodes": [
+    {"node_key":"task_start","title":"Task Start","type":"task_start","ref":"task_start","status":"completed","purpose":"Mark the beginning of the task workflow.","action_summary":["Task accepted."],"output_summary":["workflow_started=true"],"started_at":"2026-05-04T10:00:00Z","finished_at":"2026-05-04T10:00:03Z"},
+    {"node_key":"repo_architect","title":"Repo Architect","type":"skill","ref":"noah-repo-architect","version":"1.2.0","executor":"repo-architect-agent","status":"completed","purpose":"Analyze repo structure and determine affected modules.","input_summary":"Task request analyzed for backend and frontend impact.","action_summary":["Scanned repository structure.","Detected backend impact.","Detected frontend impact."],"output_summary":["affected_backend=true","affected_frontend=true"],"started_at":"2026-05-04T10:00:03Z","finished_at":"2026-05-04T10:01:20Z"},
+    {"node_key":"backend_workflow","title":"Backend Workflow","type":"skill","ref":"noah-api-feature-workflow","version":"1.0.0","executor":"backend-agent","status":"completed","purpose":"Apply backend feature changes.","action_summary":["Updated API query parsing."],"output_summary":["backend_changed=true"],"started_at":"2026-05-04T10:01:20Z","finished_at":"2026-05-04T10:02:20Z"},
+    {"node_key":"frontend_workflow","title":"Frontend Workflow","type":"skill","ref":"noah-fe-module-workflow","version":"1.0.0","executor":"frontend-agent","status":"completed","purpose":"Apply frontend feature changes.","action_summary":["Updated filter UI state."],"output_summary":["frontend_changed=true"],"started_at":"2026-05-04T10:02:20Z","finished_at":"2026-05-04T10:03:00Z"},
+    {"node_key":"contract_sync","title":"Contract Sync","type":"policy_check","ref":"noah-contract-sync","status":"completed","purpose":"Validate backend/frontend contract consistency.","action_summary":["Checked API shape."],"output_summary":["contract_ok=true"],"started_at":"2026-05-04T10:03:00Z","finished_at":"2026-05-04T10:03:20Z"},
+    {"node_key":"auth_rbac_guard","title":"Auth/RBAC Guard","type":"policy_check","ref":"noah-auth-rbac-guard","status":"completed","purpose":"Validate authentication and authorization safety.","action_summary":["Checked route permissions."],"output_summary":["rbac_ok=true"],"started_at":"2026-05-04T10:03:20Z","finished_at":"2026-05-04T10:03:35Z"},
+    {"node_key":"regression_review","title":"Regression Review","type":"review","ref":"noah-regression-review","status":"completed","purpose":"Check for regressions and missed impact areas.","action_summary":["Reviewed likely regressions."],"output_summary":["regression_risk=low"],"started_at":"2026-05-04T10:03:35Z","finished_at":"2026-05-04T10:04:00Z"},
+    {"node_key":"agentops_report","title":"AgentOps Report","type":"reporting","ref":"run-report-contract","status":"completed","purpose":"Generate structured AgentOps run report for ingestion.","action_summary":["Wrote report JSON."],"output_summary":["report_created=true"],"started_at":"2026-05-04T10:04:00Z","finished_at":"2026-05-04T10:04:20Z"}
+  ],
+  "events": [
+    {"node_key":"repo_architect","event_type":"started","event_time":"2026-05-04T10:00:03Z","summary":"Repo Architect started."},
+    {"node_key":"repo_architect","event_type":"completed","event_time":"2026-05-04T10:01:20Z","summary":"Repo Architect completed impact analysis."},
+    {"node_key":"agentops_report","event_type":"completed","event_time":"2026-05-04T10:04:20Z","summary":"AgentOps report generated."}
+  ],
+  "assets_used": [
+    {"type":"skill_doc","slug":"noah-repo-architect","version":"1.2.0","usage_role":"workflow_step"},
+    {"type":"run_report_contract","slug":"run-report-contract","version":"1.0.0","usage_role":"reporting_contract"}
+  ],
+  "worker_summary": [{"worker":"backend-agent","role":"backend implementation","status":"completed","summary":"Implemented backend role filter support."}],
+  "review_hints": {"raw_logs_available": false, "file_diff_available": false, "requires_manual_review": false}
+}
+

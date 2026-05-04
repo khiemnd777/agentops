@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "run_id": "",
+  "project_slug": "demo",
+  "nodes": [{"node_key":"repo_architect"}]
+}
+

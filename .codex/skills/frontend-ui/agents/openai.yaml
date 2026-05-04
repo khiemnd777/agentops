@@ -1,0 +1,7 @@
+interface:
+  display_name: "Frontend UI"
+  short_description: "React, MUI, and dashboard UI work"
+  default_prompt: "Use $frontend-ui to make a scoped frontend UI change."
+
+policy:
+  allow_implicit_invocation: true

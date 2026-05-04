@@ -1,0 +1,7 @@
+interface:
+  display_name: "Workflow Playback"
+  short_description: "Playback APIs and React Flow review UI"
+  default_prompt: "Use $workflow-playback to update playback behavior or UI."
+
+policy:
+  allow_implicit_invocation: true

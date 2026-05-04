@@ -1,0 +1,7 @@
+interface:
+  display_name: "Sync Import Audit"
+  short_description: "Repo sync, report import, and audit"
+  default_prompt: "Use $sync-import-audit to update sync, import, or audit behavior."
+
+policy:
+  allow_implicit_invocation: true

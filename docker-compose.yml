@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DBNAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["postgres", "-c", "port=${POSTGRES_CONTAINER_PORT}"]
+    ports:
+      - "${POSTGRES_HOST_PORT}:${POSTGRES_CONTAINER_PORT}"
+    volumes:
+      - "${POSTGRES_HOST_DATA_DIR}:${POSTGRES_CONTAINER_DATA_DIR}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p ${POSTGRES_CONTAINER_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_DBNAME}"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./api
+    environment:
+      API_ADDR: :${API_CONTAINER_PORT}
+      AUTH_ENABLED: "false"
+      POSTGRES_HOST: postgres
+      POSTGRES_CONTAINER_PORT: ${POSTGRES_CONTAINER_PORT}
+      POSTGRES_DBNAME: ${POSTGRES_DBNAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${API_HOST_PORT}:${API_CONTAINER_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${AGENTOPS_REPO_ROOT:-./sample-repos}:/workspace/repos
+      - ${AGENTOPS_HOST_REPO_ROOT:-/Users}:${AGENTOPS_HOST_REPO_ROOT:-/Users}
+
+  frontend:
+    build:
+      context: ./fe
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      FRONTEND_CONTAINER_PORT: ${FRONTEND_CONTAINER_PORT}
+      VITE_API_PROXY_TARGET: http://api:${API_CONTAINER_PORT}
+    ports:
+      - "${FRONTEND_HOST_PORT}:${FRONTEND_CONTAINER_PORT}"
+    depends_on:
+      - api
+    volumes:
+      - ./fe:/app
+      - /app/node_modules

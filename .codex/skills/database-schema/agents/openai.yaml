@@ -1,0 +1,7 @@
+interface:
+  display_name: "Database Schema"
+  short_description: "Migrations, persistence, and data integrity"
+  default_prompt: "Use $database-schema to change persistence behavior safely."
+
+policy:
+  allow_implicit_invocation: true

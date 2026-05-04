@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run_20260504_warning",
+  "project_slug": "demo",
+  "task": {"title": "Frontend-only change with skipped RBAC review", "input_summary": "Update a list page."},
+  "workflow": {"expected_id": "fullstack-feature-workflow", "expected_version": "1.0.0", "actual_id": "fullstack-feature-workflow", "actual_version": "1.0.0"},
+  "status": "completed",
+  "started_at": "2026-05-04T11:00:00Z",
+  "finished_at": "2026-05-04T11:02:00Z",
+  "change_summary": ["Updated frontend list page."],
+  "final_summary": "Frontend list page was updated.",
+  "nodes": [
+    {"node_key":"task_start","title":"Task Start","type":"task_start","status":"completed"},
+    {"node_key":"repo_architect","title":"Repo Architect","type":"skill","ref":"noah-repo-architect","status":"completed"},
+    {"node_key":"frontend_workflow","title":"Frontend Workflow","type":"skill","ref":"noah-fe-module-workflow","status":"completed"},
+    {"node_key":"agentops_report","title":"AgentOps Report","type":"reporting","ref":"run-report-contract","status":"completed"}
+  ],
+  "events": [{"node_key":"frontend_workflow","event_type":"completed","event_time":"2026-05-04T11:01:20Z","summary":"Frontend update completed."}],
+  "assets_used": [{"type":"skill_doc","slug":"noah-fe-module-workflow","version":"1.0.0","usage_role":"workflow_step"}],
+  "worker_summary": [],
+  "review_hints": {"raw_logs_available": false, "file_diff_available": false, "requires_manual_review": true}
+}
+

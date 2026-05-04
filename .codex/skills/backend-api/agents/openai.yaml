@@ -1,0 +1,7 @@
+interface:
+  display_name: "Backend API"
+  short_description: "Backend handlers, services, and repositories"
+  default_prompt: "Use $backend-api to make a scoped backend API change."
+
+policy:
+  allow_implicit_invocation: true

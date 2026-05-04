@@ -1,0 +1,7 @@
+interface:
+  display_name: "QA Verification"
+  short_description: "Choose checks before final handoff"
+  default_prompt: "Use $qa-verification to choose and run the right checks."
+
+policy:
+  allow_implicit_invocation: true

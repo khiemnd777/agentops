@@ -1,0 +1,7 @@
+interface:
+  display_name: "Repo Architecture"
+  short_description: "Route cross-stack repo changes"
+  default_prompt: "Use $repo-architecture to classify the owning files before editing."
+
+policy:
+  allow_implicit_invocation: true

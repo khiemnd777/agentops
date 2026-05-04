@@ -1,0 +1,8 @@
+fe/node_modules/
+fe/dist/
+fe/*.tsbuildinfo
+api/.gocache/
+sample-repos/
+.data/
+.env
+.DS_Store
