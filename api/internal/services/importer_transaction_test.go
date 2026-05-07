@@ -36,7 +36,7 @@ func TestRunImporterRollsBackPartialTaskRunOnFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	repoPath := filepath.Join(t.TempDir(), "repo")
-	if err := os.MkdirAll(filepath.Join(repoPath, ".agentops", "runs", "run_tx_failure"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(repoPath, ".codex", "reports", "runs", "run_tx_failure"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	slug := "tx-failure-" + time.Now().UTC().Format("150405000")
@@ -58,7 +58,7 @@ func TestRunImporterRollsBackPartialTaskRunOnFailure(t *testing.T) {
   "events":[],
   "assets_used":[]
 }`
-	reportPath := filepath.Join(repoPath, ".agentops", "runs", "run_tx_failure", "run.report.json")
+	reportPath := filepath.Join(repoPath, ".codex", "reports", "runs", "run_tx_failure", "run.report.json")
 	if err := os.WriteFile(reportPath, []byte(report), 0644); err != nil {
 		t.Fatal(err)
 	}

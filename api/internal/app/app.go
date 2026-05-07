@@ -5,6 +5,7 @@ import (
 
 	"agentops-workspace/api/internal/config"
 	"agentops-workspace/api/internal/handlers"
+	"agentops-workspace/api/internal/mcp"
 	"agentops-workspace/api/internal/repo"
 	"agentops-workspace/api/internal/services"
 
@@ -23,14 +24,15 @@ func New(ctx context.Context, cfg config.Config, db *pgxpool.Pool) (*fiber.App, 
 	importer := services.NewRunImporter(store, cfg.RunImport.MaxReportsPerScan)
 	h := handlers.Handler{
 		Store: store, Guard: guard, Scanner: services.RepoScanner{},
-		Sync:     services.SyncService{Store: store, Guard: guard},
+		Sync:     services.SyncService{Store: store, Guard: guard, MCPPublicURL: cfg.MCPPublicURL},
 		Importer: importer,
 		Playback: services.PlaybackService{Store: store, Audit: services.AuditService{Store: store}},
 	}
 	app := fiber.New(fiber.Config{AppName: "AgentOps Workspace API"})
 	app.Use(recover.New())
-	app.Use(cors.New(cors.Config{AllowOrigins: "*", AllowHeaders: "Origin, Content-Type, Accept, Authorization"}))
+	app.Use(cors.New(cors.Config{AllowOrigins: "*", AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-AgentOps-MCP-Token"}))
 	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"ok": true}) })
+	mcp.Server{Config: cfg, Store: store, Sync: h.Sync, Importer: importer}.Register(app)
 	api := app.Group("/api")
 	if cfg.AuthEnabled {
 		api.Use(func(c *fiber.Ctx) error {

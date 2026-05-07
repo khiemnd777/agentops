@@ -26,6 +26,19 @@ vi.mock('../api/client', () => ({
   del: apiMock.del
 }));
 
+function emptyScan() {
+  return {
+    project_id: 'p1',
+    repo_path: '/repo/new-demo',
+    git_repo: false,
+    readable: true,
+    scanned_files: 0,
+    candidates: [],
+    ignored_dirs: [],
+    truncated: false
+  };
+}
+
 describe('ProjectsPage', () => {
   afterEach(() => {
     cleanup();
@@ -83,6 +96,9 @@ describe('ProjectsPage', () => {
           status: 'active'
         });
       }
+      if (path === '/api/projects/p1/scan') {
+        return Promise.resolve(emptyScan());
+      }
       return Promise.resolve({});
     });
 
@@ -100,10 +116,10 @@ describe('ProjectsPage', () => {
       repo_path: '/repo/new-demo',
       create_repo_path: true
     })));
-    expect(await screen.findByText('Scan project repository')).toBeInTheDocument();
+    expect(await screen.findByText('Apply Preset')).toBeInTheDocument();
   });
 
-  it('scans only after a project is created and renders grouped candidates', async () => {
+  it('scans automatically after a project is created and renders grouped candidates', async () => {
     apiMock.post.mockImplementation((path: string) => {
       if (path === '/api/projects') {
         return Promise.resolve({
@@ -126,6 +142,26 @@ describe('ProjectsPage', () => {
           candidates: [
             { path: 'AGENTS.md', kind: 'agents_file', reason: 'well-known agent instruction file', size_bytes: 12, matched_keywords: ['agent'] }
           ],
+          private: {
+            path: '/repo/project-one/.codex',
+            exists: true,
+            readable: true,
+            scanned_files: 1,
+            candidates: [
+              { path: 'skills/backend/SKILL.md', kind: 'agent_markdown', reason: 'Markdown context file', size_bytes: 20 }
+            ],
+            ignored_dirs: [],
+            truncated: false
+          },
+          global: {
+            path: '/Users/test/.codex',
+            exists: true,
+            readable: true,
+            scanned_files: 1,
+            candidates: [],
+            ignored_dirs: [],
+            truncated: false
+          },
           ignored_dirs: ['node_modules'],
           truncated: false
         });
@@ -140,12 +176,12 @@ describe('ProjectsPage', () => {
     fireEvent.click(screen.getByText('Validate and create'));
 
     await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/api/projects', expect.objectContaining({ repo_path: '/repo/project-one' })));
-    expect(apiMock.post).not.toHaveBeenCalledWith('/api/projects/p1/scan');
-
-    fireEvent.click(await screen.findByText('Scan project repository'));
+    await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/api/projects/p1/scan'));
     expect(await screen.findByText('Agents File')).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
     expect(screen.getByText('well-known agent instruction file')).toBeInTheDocument();
+    expect(screen.getByText('private .codex: 1')).toBeInTheDocument();
+    expect(screen.getByText('global .codex: 0')).toBeInTheDocument();
     expect(screen.queryByText(/"candidates"/)).not.toBeInTheDocument();
   });
 

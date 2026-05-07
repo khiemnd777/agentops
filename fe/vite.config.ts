@@ -19,6 +19,10 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiProxyTarget,
           changeOrigin: true
+        },
+        '/mcp': {
+          target: apiProxyTarget,
+          changeOrigin: true
         }
       }
     },

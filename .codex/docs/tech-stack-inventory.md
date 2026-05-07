@@ -9,8 +9,8 @@ This inventory is for coding agents working on this repository. It describes the
 - Frontend URL: `http://localhost:3000`.
 - Backend URL: `http://localhost:8080`.
 - Database: PostgreSQL with pgvector-ready schema.
-- Source-of-truth rule: PostgreSQL is canonical; mounted repo files are generated projections.
-- MVP boundary: no direct Codex/agent execution. Future execution stays behind the `AgentRunner` interface.
+- Source-of-truth rule: PostgreSQL is canonical; mounted repo files under `AGENTS.md` and `.codex/**` are generated projections and agent editing surfaces.
+- MVP boundary: no direct Codex/agent execution. Repo-local and project-local agents are external actors that sync through shared services or MCP.
 
 ## Repository Layout
 
@@ -38,6 +38,13 @@ This inventory is for coding agents working on this repository. It describes the
 
 ```sh
 cd api && GOCACHE="$PWD/.gocache" go test ./...
+```
+
+AgentOps-local CLI:
+
+```sh
+cd api && GOCACHE="$PWD/.gocache" go run ./cmd/agentops --help
+make cli ARGS="--help"
 ```
 
 When running through Docker:

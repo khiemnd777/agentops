@@ -61,7 +61,7 @@ func TestApplyAssetPresetToProjectCopiesPinnedTemplateAndSkipsExisting(t *testin
 		RETURNING id`, ws.ID, "preset-"+suffix, "Preset "+suffix, "Test preset").Scan(&presetID); err != nil {
 		t.Fatal(err)
 	}
-	targetPath := "docs/agentic/skills/" + slug + ".md"
+	targetPath := ".codex/skills/" + slug + "/SKILL.md"
 	if err := pool.QueryRow(ctx, `
 		INSERT INTO asset_preset_items(preset_id,asset_id,asset_version_id,target_path,sort_order)
 		VALUES($1,$2,$3,$4,10)

@@ -151,9 +151,16 @@ CREATE TABLE IF NOT EXISTS sync_runs (
   direction TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'running',
   summary TEXT NOT NULL DEFAULT '',
+  actor_type TEXT NOT NULL DEFAULT 'unknown',
+  actor_name TEXT NOT NULL DEFAULT '',
+  transport TEXT NOT NULL DEFAULT 'unknown',
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   finished_at TIMESTAMPTZ
 );
+
+ALTER TABLE sync_runs ADD COLUMN IF NOT EXISTS actor_type TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE sync_runs ADD COLUMN IF NOT EXISTS actor_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE sync_runs ADD COLUMN IF NOT EXISTS transport TEXT NOT NULL DEFAULT 'unknown';
 
 CREATE TABLE IF NOT EXISTS sync_run_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

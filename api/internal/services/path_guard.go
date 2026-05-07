@@ -121,9 +121,7 @@ func isAllowedGeneratedTarget(path string) bool {
 	switch {
 	case path == "AGENTS.md", path == "README.md":
 		return true
-	case strings.HasPrefix(path, ".agentops/"):
-		return !strings.HasPrefix(path, ".agentops/../")
-	case strings.HasPrefix(path, "docs/agentic/"):
+	case strings.HasPrefix(path, ".codex/"):
 		return true
 	default:
 		return false

@@ -1,11 +1,48 @@
 export type Project = {
   id: string;
+  workspace_id?: string;
   name: string;
   slug: string;
   repo_path: string;
+  host_path_hint?: string | null;
   default_branch: string;
   description: string;
   status: string;
+  last_auto_import_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SyncItem = {
+  target_path: string;
+  action: string;
+  status: string;
+  db_checksum?: string;
+  repo_checksum?: string;
+  message?: string;
+  rendered_preview?: string;
+  asset_type?: string;
+  asset_slug?: string;
+  diff_summary?: string;
+  backup_path?: string;
+  allowed_actions?: string[];
+};
+
+export type SyncResponse = {
+  mode: string;
+  items: SyncItem[];
+};
+
+export type SyncRun = {
+  id: string;
+  direction: string;
+  status: string;
+  summary: string;
+  actor_type?: string;
+  actor_name?: string;
+  transport?: string;
+  started_at: string;
+  finished_at?: string | null;
 };
 
 export type ProjectScanCandidate = {
@@ -19,7 +56,21 @@ export type ProjectScanCandidate = {
 export type ProjectScanResponse = {
   project_id: string;
   repo_path: string;
+  private_path?: string;
+  global_path?: string;
   git_repo: boolean;
+  readable: boolean;
+  scanned_files: number;
+  candidates: ProjectScanCandidate[];
+  private?: ProjectScanSection;
+  global?: ProjectScanSection;
+  ignored_dirs: string[];
+  truncated: boolean;
+};
+
+export type ProjectScanSection = {
+  path: string;
+  exists: boolean;
   readable: boolean;
   scanned_files: number;
   candidates: ProjectScanCandidate[];

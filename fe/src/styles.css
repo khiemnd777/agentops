@@ -98,6 +98,137 @@ body {
   padding: 24px;
 }
 
+.workspace-v2-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  background: #f7f8f5;
+}
+
+.workspace-v2-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  border-right: 1px solid #dde2dc;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.workspace-v2-brand {
+  padding: 20px;
+}
+
+.workspace-v2-brand-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1f6f78;
+  background: #e7f2f2;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.workspace-v2-project-node > .MuiListItemButton-root {
+  min-height: 52px;
+}
+
+.workspace-v2-project-sections {
+  padding: 2px 0 8px;
+}
+
+.workspace-v2-project-sections .MuiListItemButton-root {
+  min-height: 38px;
+  margin-left: 34px;
+  padding-left: 12px;
+  border-radius: 6px;
+}
+
+.workspace-v2-project-sections .MuiListItemIcon-root {
+  min-width: 32px;
+}
+
+.workspace-v2-project-sections .MuiListItemText-primary {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-v2-content {
+  min-width: 0;
+  padding: 24px;
+  max-width: 1500px;
+}
+
+.workspace-v2-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workspace-v2-panel,
+.workspace-v2-code-panel {
+  padding: 16px;
+}
+
+.workspace-v2-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.workspace-v2-info-tile {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e0e5df;
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.workspace-v2-info-tile .MuiTypography-body2 {
+  overflow-wrap: anywhere;
+}
+
+.workspace-v2-flow {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #e0e5df;
+  border-radius: 8px;
+  background: #f7faf8;
+}
+
+.workspace-v2-two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
+}
+
+.workspace-v2-code {
+  margin: 12px 0 0;
+  max-height: 520px;
+}
+
+.workspace-v2-sync-item,
+.workspace-v2-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+}
+
+.workspace-v2-history-row {
+  border-bottom: 1px solid #e3e7e2;
+}
+
+.workspace-v2-history-row:last-child {
+  border-bottom: 0;
+}
+
 .project-context-tabs {
   border-bottom: 1px solid #dde2dc;
   background: transparent;

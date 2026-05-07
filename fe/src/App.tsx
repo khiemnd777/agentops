@@ -6,10 +6,12 @@ import FolderIcon from '@mui/icons-material/Folder';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import HubIcon from '@mui/icons-material/Hub';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { PresetsPage } from './pages/PresetsPage';
 import { ReviewsPage } from './pages/ReviewsPage';
+import { WorkspaceV2Page } from './pages/WorkspaceV2Page';
 import { WorkflowsPage } from './pages/WorkflowsPage';
 import { get } from './api/client';
 import type { Project } from './types';
@@ -26,6 +28,7 @@ const theme = createTheme({
 });
 
 const workspaceTools = [
+  { key: 'workspace-v2', label: 'Workspace V2', icon: <HubIcon fontSize="small" /> },
   { key: 'presets', label: 'Preset Library', icon: <Inventory2Icon fontSize="small" /> },
   { key: 'workflows', label: 'Workflow designer', icon: <AccountTreeIcon fontSize="small" /> },
   { key: 'reviews', label: 'Review Center', icon: <RateReviewIcon fontSize="small" /> }
@@ -54,6 +57,7 @@ export function App() {
   const selectedProjectId = route.type === 'project' ? route.projectId : '';
 
   const content = useMemo(() => {
+    if (route.type === 'workspace-v2') return <WorkspaceV2Page projectId={route.projectId} section={route.section} />;
     if (route.type === 'project') return <ProjectsPage projectId={route.projectId} section={route.section} />;
     if (route.type === 'playback') return <ReviewsPage taskRunId={route.taskRunId} />;
     switch (route.key) {
@@ -69,6 +73,15 @@ export function App() {
         return <DashboardPage />;
     }
   }, [route]);
+
+  if (route.type === 'workspace-v2') {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        {content}
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -141,15 +154,20 @@ type Route =
   | { type: 'projects'; key: string }
   | { type: 'workspace-tool'; key: string }
   | { type: 'project'; key: string; projectId: string; section: string }
-  | { type: 'playback'; key: string; taskRunId: string };
+  | { type: 'playback'; key: string; taskRunId: string }
+  | { type: 'workspace-v2'; key: string; projectId: string; section: string };
 
 function parseRoute(page: string): Route {
   const parts = page.split('/').filter(Boolean);
   if (parts[0] === 'project') {
     return { type: 'project', key: 'project', projectId: parts[1] || '', section: parts[2] || 'overview' };
   }
+  if (parts[0] === 'workspace-v2') {
+    if (parts[1] === 'project') return { type: 'workspace-v2', key: 'workspace-v2', projectId: parts[2] || '', section: parts[3] || 'repository' };
+    return { type: 'workspace-v2', key: 'workspace-v2', projectId: '', section: 'repository' };
+  }
   if (parts[0] === 'playback') return { type: 'playback', key: 'reviews', taskRunId: parts[1] || '' };
   if (parts[0] === 'projects') return { type: 'projects', key: 'projects' };
-  if (['presets', 'workflows', 'reviews'].includes(parts[0])) return { type: 'workspace-tool', key: parts[0] };
+  if (['workspace-v2', 'presets', 'workflows', 'reviews'].includes(parts[0])) return { type: 'workspace-tool', key: parts[0] };
   return { type: 'dashboard', key: 'dashboard' };
 }

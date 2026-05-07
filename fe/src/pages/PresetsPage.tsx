@@ -560,19 +560,19 @@ function targetPathForType(type: string, slug: string) {
     case 'readme':
       return 'README.md';
     case 'skill_doc':
-      return `docs/agentic/skills/${slug}.md`;
+      return `.codex/skills/${slug}/SKILL.md`;
     case 'subagent_doc':
-      return `docs/agentic/subagents/${slug}.md`;
+      return `.codex/agents/${slug}.toml`;
     case 'policy_doc':
-      return `docs/agentic/policies/${slug}.md`;
+      return `.codex/policies/${slug}.md`;
     case 'workflow_doc':
-      return `docs/agentic/workflows/${slug}.workflow.yaml`;
+      return `.codex/workflows/${slug}.workflow.yaml`;
     case 'prompt_template':
-      return `docs/agentic/prompts/${slug}.md`;
+      return `.codex/prompts/${slug}.md`;
     case 'checklist':
-      return `docs/agentic/checklists/${slug}.md`;
+      return `.codex/checklists/${slug}.md`;
     case 'run_report_contract':
-      return 'docs/agentic/contracts/run-report-contract.md';
+      return '.codex/reports/run-report-contract.md';
     default:
       return '';
   }

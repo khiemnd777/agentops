@@ -125,7 +125,37 @@ func (s Seeder) seedWorkflow(ctx context.Context, workspaceID string) error {
 func defaultAgentsMD() string {
 	return `# Agent Instructions
 
-Follow the project-specific skills, policies, workflow templates, checklists, and reporting contract materialized under ` + "`docs/agentic/`" + `.
+This project uses AgentOps as the control plane for Codex-native agent assets.
+
+Use only these managed paths:
+
+- ` + "`AGENTS.md`" + `
+- ` + "`.codex/**`" + `
+
+Do not create or use:
+
+- ` + "`.agentops/**`" + `
+- ` + "`.agents/**`" + `
+- ` + "`docs/agentic/**`" + `
+
+Follow the project-specific skills, policies, workflow templates, checklists, and reporting contract materialized under ` + "`.codex/`" + `.
+
+## AgentOps Sync
+
+When you change files under ` + "`.codex/**`" + ` or ` + "`AGENTS.md`" + `, sync them back to AgentOps DB by using the AgentOps MCP server.
+
+Preferred flow:
+
+1. Read ` + "`.codex/project.json`" + ` to identify the AgentOps project.
+2. Read ` + "`.codex/project.json`" + ` field ` + "`mcp.endpoint`" + ` for the AgentOps MCP endpoint.
+3. Use the token from the environment variable named by ` + "`.codex/project.json`" + ` field ` + "`mcp.token_env`" + `; never hardcode the token into repo files.
+4. Inspect ` + "`.codex/sync/lock.json`" + ` before changing managed files.
+5. Make file changes locally.
+6. Call MCP tool ` + "`agentops_preview_files_to_db`" + `.
+7. If the preview is safe, call MCP tool ` + "`agentops_sync_files_to_db`" + `.
+8. Write a run report to ` + "`.codex/reports/runs/{run_id}/run.report.json`" + `.
+
+Never overwrite published AgentOps versions directly. Repo file changes must be imported as draft versions or import records.
 
 ## AgentOps Reporting Requirement
 
@@ -133,11 +163,11 @@ At the end of every task, you MUST generate an AgentOps run report.
 
 Output path:
 
-` + "`.agentops/runs/{run_id}/run.report.json`" + `
+` + "`.codex/reports/runs/{run_id}/run.report.json`" + `
 
 The report must follow the schema defined in:
 
-` + "`docs/agentic/contracts/run-report-contract.md`" + `
+` + "`.codex/reports/run-report-contract.md`" + `
 
 The report must include:
 - task title
@@ -161,13 +191,13 @@ func runReportContract() string {
 
 External agents such as Codex must create a structured report after every task:
 
-` + "`.agentops/runs/{run_id}/run.report.json`" + `
+` + "`.codex/reports/runs/{run_id}/run.report.json`" + `
 
 The JSON report must include summary-level structured data only. Write exactly one JSON object with these top-level fields:
 
 - ` + "`schema_version`" + `: string, currently "1.0"
 - ` + "`run_id`" + `: stable external run id, unique within the project
-- ` + "`project_slug`" + `: must match ` + "`.agentops/project.yaml`" + `
+- ` + "`project_slug`" + `: must match ` + "`.codex/project.json`" + `
 - ` + "`task`" + `: object with ` + "`title`" + ` and ` + "`input_summary`" + `
 - ` + "`workflow`" + `: object with ` + "`expected_id`" + `, ` + "`expected_version`" + `, ` + "`actual_id`" + `, and ` + "`actual_version`" + `
 - ` + "`status`" + `: one of completed, failed, blocked, needs_review

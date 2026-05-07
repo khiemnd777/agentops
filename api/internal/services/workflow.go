@@ -45,22 +45,22 @@ type AuditService struct {
 }
 
 type AssetsLock struct {
-	Version int `yaml:"version"`
+	Version int `yaml:"version" json:"version"`
 	Project struct {
-		ID   string `yaml:"id"`
-		Slug string `yaml:"slug"`
-	} `yaml:"project"`
-	Assets []LockedAsset `yaml:"assets"`
+		ID   string `yaml:"id" json:"id"`
+		Slug string `yaml:"slug" json:"slug"`
+	} `yaml:"project" json:"project"`
+	Assets []LockedAsset `yaml:"assets" json:"assets"`
 }
 
 type LockedAsset struct {
-	AssetID    string `yaml:"asset_id"`
-	Type       string `yaml:"type"`
-	Slug       string `yaml:"slug"`
-	Version    string `yaml:"version"`
-	TargetPath string `yaml:"target_path"`
-	Checksum   string `yaml:"checksum"`
-	Generated  bool   `yaml:"generated"`
+	AssetID    string `yaml:"asset_id" json:"asset_id"`
+	Type       string `yaml:"type" json:"type"`
+	Slug       string `yaml:"slug" json:"slug"`
+	Version    string `yaml:"version" json:"version"`
+	TargetPath string `yaml:"target_path" json:"target_path"`
+	Checksum   string `yaml:"checksum" json:"checksum"`
+	Generated  bool   `yaml:"generated" json:"generated"`
 }
 
 func (s AuditService) FindWorkflow(ctx context.Context, workspaceID, slug, version string) (string, WorkflowDefinition, string, error) {
@@ -161,7 +161,7 @@ func (s AuditService) AuditWithLock(report RunReport, def WorkflowDefinition, lo
 	for _, used := range report.AssetsUsed {
 		locked, ok := lockBySlug[used.Slug]
 		if !ok {
-			result.Warnings = append(result.Warnings, map[string]any{"type": "asset_not_in_lock", "asset_slug": used.Slug, "severity": "medium", "message": "Report used an asset not present in .agentops/assets.lock.yaml."})
+			result.Warnings = append(result.Warnings, map[string]any{"type": "asset_not_in_lock", "asset_slug": used.Slug, "severity": "medium", "message": "Report used an asset not present in .codex/sync/lock.json."})
 			continue
 		}
 		if used.Version != "" && locked.Version != "" && used.Version != locked.Version {
@@ -180,11 +180,11 @@ func (s AuditService) AuditWithLock(report RunReport, def WorkflowDefinition, lo
 
 func LoadAssetsLock(repoPath string) (AssetsLock, error) {
 	var lock AssetsLock
-	data, err := os.ReadFile(filepath.Join(repoPath, ".agentops", "assets.lock.yaml"))
+	data, err := os.ReadFile(filepath.Join(repoPath, ".codex", "sync", "lock.json"))
 	if err != nil {
 		return lock, err
 	}
-	if err := yaml.Unmarshal(data, &lock); err != nil {
+	if err := json.Unmarshal(data, &lock); err != nil {
 		return lock, err
 	}
 	return lock, nil

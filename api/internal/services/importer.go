@@ -36,7 +36,7 @@ func (i *RunImporter) AutoImport(ctx context.Context, project domain.Project) (d
 		return domain.ImportSummary{Locked: true}, nil
 	}
 	defer i.unlock(project.ID)
-	pattern := filepath.Join(project.RepoPath, ".agentops", "runs", "*", "run.report.json")
+	pattern := filepath.Join(project.RepoPath, ".codex", "reports", "runs", "*", "run.report.json")
 	files, err := filepath.Glob(pattern)
 	if err != nil {
 		return domain.ImportSummary{}, err
@@ -71,14 +71,18 @@ func (i *RunImporter) ImportFile(ctx context.Context, project domain.Project, fi
 	if err != nil {
 		return "failed", err
 	}
+	return i.ImportBytes(ctx, project, file, data)
+}
+
+func (i *RunImporter) ImportBytes(ctx context.Context, project domain.Project, sourcePath string, data []byte) (string, error) {
 	checksum := SHA256Bytes(data)
 	report, err := i.Validator.ParseAndValidate(data, project.Slug)
 	if err != nil {
 		runID := report.RunID
 		if runID == "" {
-			runID = filepath.Base(filepath.Dir(file))
+			runID = filepath.Base(filepath.Dir(sourcePath))
 		}
-		_, _ = i.Store.DB.Exec(ctx, `INSERT INTO task_run_imports(project_id,run_id,source_path,source_checksum,import_status,error_message,created_at) VALUES($1,$2,$3,$4,$5,$6,now()) ON CONFLICT(project_id,run_id,source_checksum) DO NOTHING`, project.ID, runID, file, checksum, validationStatus(err), err.Error())
+		_, _ = i.Store.DB.Exec(ctx, `INSERT INTO task_run_imports(project_id,run_id,source_path,source_checksum,import_status,error_message,created_at) VALUES($1,$2,$3,$4,$5,$6,now()) ON CONFLICT(project_id,run_id,source_checksum) DO NOTHING`, project.ID, runID, sourcePath, checksum, validationStatus(err), err.Error())
 		return validationStatus(err), err
 	}
 	var exists bool
@@ -112,7 +116,7 @@ func (i *RunImporter) ImportFile(ctx context.Context, project domain.Project, fi
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now(),'imported',$15,$16)
 		ON CONFLICT(project_id,external_run_id) DO UPDATE SET workflow_template_id=EXCLUDED.workflow_template_id,title=EXCLUDED.title,input_summary=EXCLUDED.input_summary,change_summary=EXCLUDED.change_summary,final_summary=EXCLUDED.final_summary,status=EXCLUDED.status,expected_workflow_id=EXCLUDED.expected_workflow_id,expected_workflow_version=EXCLUDED.expected_workflow_version,actual_workflow_id=EXCLUDED.actual_workflow_id,actual_workflow_version=EXCLUDED.actual_workflow_version,report_checksum=EXCLUDED.report_checksum,report_source_path=EXCLUDED.report_source_path,imported_at=now(),import_status='imported',started_at=EXCLUDED.started_at,finished_at=EXCLUDED.finished_at,updated_at=now()
 		RETURNING id`,
-		project.ID, workflowTemplateID, report.RunID, report.Task.Title, report.Task.InputSummary, changeSummary, report.FinalSummary, report.Status, report.Workflow.ExpectedID, report.Workflow.ExpectedVersion, report.Workflow.ActualID, report.Workflow.ActualVersion, checksum, file, started, finished).Scan(&taskRunID); err != nil {
+		project.ID, workflowTemplateID, report.RunID, report.Task.Title, report.Task.InputSummary, changeSummary, report.FinalSummary, report.Status, report.Workflow.ExpectedID, report.Workflow.ExpectedVersion, report.Workflow.ActualID, report.Workflow.ActualVersion, checksum, sourcePath, started, finished).Scan(&taskRunID); err != nil {
 		return "failed", err
 	}
 	if i.failAfterTaskRunForTest {
@@ -151,7 +155,7 @@ func (i *RunImporter) ImportFile(ctx context.Context, project domain.Project, fi
 	}
 	var revision int
 	_ = tx.QueryRow(ctx, `SELECT COALESCE(MAX(import_revision),0)+1 FROM task_run_imports WHERE project_id=$1 AND run_id=$2`, project.ID, report.RunID).Scan(&revision)
-	if _, err := tx.Exec(ctx, `INSERT INTO task_run_imports(project_id,task_run_id,run_id,source_path,source_checksum,import_revision,import_status,imported_at) VALUES($1,$2,$3,$4,$5,$6,'imported',now()) ON CONFLICT(project_id,run_id,source_checksum) DO NOTHING`, project.ID, taskRunID, report.RunID, file, checksum, revision); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO task_run_imports(project_id,task_run_id,run_id,source_path,source_checksum,import_revision,import_status,imported_at) VALUES($1,$2,$3,$4,$5,$6,'imported',now()) ON CONFLICT(project_id,run_id,source_checksum) DO NOTHING`, project.ID, taskRunID, report.RunID, sourcePath, checksum, revision); err != nil {
 		return "failed", err
 	}
 	if err := tx.Commit(ctx); err != nil {

@@ -16,10 +16,10 @@ func TestPathGuardAllowsOnlyRootsAndGeneratedTargets(t *testing.T) {
 	if _, err := guard.ValidateRepoPath(repo); err != nil {
 		t.Fatalf("expected repo to validate: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(repo, ".agentops-write-test")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(repo, ".codex-write-test")); !os.IsNotExist(err) {
 		t.Fatal("expected repo validation to avoid write probes")
 	}
-	if _, err := guard.SafeTarget(repo, "docs/agentic/skills/repo-architect.md"); err != nil {
+	if _, err := guard.SafeTarget(repo, ".codex/skills/repo-architect/SKILL.md"); err != nil {
 		t.Fatalf("expected generated target to validate: %v", err)
 	}
 	if _, err := guard.SafeTarget(repo, "src/main.go"); err == nil {

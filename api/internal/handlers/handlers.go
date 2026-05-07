@@ -275,6 +275,8 @@ func (h Handler) syncApply(c *fiber.Ctx) error {
 	}
 	var req services.SyncRequest
 	_ = c.BodyParser(&req)
+	req.ActorType = defaultString(req.ActorType, "operator")
+	req.Transport = defaultString(req.Transport, "http_api")
 	switch strings.ToUpper(req.Mode) {
 	case "REPO_TO_DB":
 		res, err := h.Sync.ApplyRepoToDBWithRequest(c.Context(), p, req)
@@ -289,8 +291,8 @@ func (h Handler) syncApply(c *fiber.Ctx) error {
 }
 
 func (h Handler) syncRuns(c *fiber.Ctx) error {
-	rows, err := h.Store.DB.Query(c.Context(), `SELECT id,direction,status,summary,started_at,finished_at FROM sync_runs WHERE project_id=$1 ORDER BY started_at DESC LIMIT 25`, c.Params("id"))
-	return rowsToMaps(c, rows, err, []string{"id", "direction", "status", "summary", "started_at", "finished_at"})
+	rows, err := h.Store.DB.Query(c.Context(), `SELECT id,direction,status,summary,actor_type,actor_name,transport,started_at,finished_at FROM sync_runs WHERE project_id=$1 ORDER BY started_at DESC LIMIT 25`, c.Params("id"))
+	return rowsToMaps(c, rows, err, []string{"id", "direction", "status", "summary", "actor_type", "actor_name", "transport", "started_at", "finished_at"})
 }
 
 func (h Handler) listAssets(c *fiber.Ctx) error {
@@ -1135,4 +1137,11 @@ func contains(items []string, value string) bool {
 		}
 	}
 	return false
+}
+
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }

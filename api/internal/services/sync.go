@@ -14,12 +14,12 @@ import (
 	"agentops-workspace/api/internal/repo"
 
 	"github.com/jackc/pgx/v5"
-	"gopkg.in/yaml.v3"
 )
 
 type SyncService struct {
-	Store repo.Store
-	Guard PathGuard
+	Store        repo.Store
+	Guard        PathGuard
+	MCPPublicURL string
 }
 
 type SyncRequest struct {
@@ -29,6 +29,9 @@ type SyncRequest struct {
 	TargetPaths    []string `json:"target_paths"`
 	Preview        bool     `json:"preview"`
 	ConflictAction string   `json:"conflict_action"`
+	ActorType      string   `json:"actor_type"`
+	ActorName      string   `json:"actor_name"`
+	Transport      string   `json:"transport"`
 	Actions        []struct {
 		TargetPath string `json:"target_path"`
 		Action     string `json:"action"`
@@ -110,7 +113,7 @@ func (s SyncService) PreviewWithRequest(ctx context.Context, project domain.Proj
 	}
 	repoManaged, _ := scanManagedRepoFiles(project.RepoPath)
 	for _, repoFile := range repoManaged {
-		if repoFile == ".agentops/project.yaml" || repoFile == ".agentops/assets.lock.yaml" {
+		if repoFile == ".codex/project.json" || repoFile == ".codex/sync/lock.json" {
 			continue
 		}
 		if !plannedTarget(items, repoFile) {
@@ -126,6 +129,7 @@ func (s SyncService) ApplyDBToRepo(ctx context.Context, project domain.Project) 
 }
 
 func (s SyncService) ApplyDBToRepoWithRequest(ctx context.Context, project domain.Project, req SyncRequest) (SyncResponse, error) {
+	req = normalizeActor(req, "operator", "http_api")
 	req.Mode = "DB_TO_REPO"
 	preview, err := s.PreviewWithRequest(ctx, project, req)
 	if err != nil {
@@ -137,7 +141,7 @@ func (s SyncService) ApplyDBToRepoWithRequest(ctx context.Context, project domai
 	}
 	defer tx.Rollback(ctx)
 	var syncRunID string
-	if err := tx.QueryRow(ctx, `INSERT INTO sync_runs(project_id,direction,status) VALUES($1,'DB_TO_REPO','running') RETURNING id`, project.ID).Scan(&syncRunID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO sync_runs(project_id,direction,status,actor_type,actor_name,transport) VALUES($1,'DB_TO_REPO','running',$2,$3,$4) RETURNING id`, project.ID, req.ActorType, req.ActorName, req.Transport).Scan(&syncRunID); err != nil {
 		return preview, err
 	}
 	for i, item := range preview.Items {
@@ -245,6 +249,7 @@ func (s SyncService) ApplyRepoToDB(ctx context.Context, project domain.Project) 
 }
 
 func (s SyncService) ApplyRepoToDBWithRequest(ctx context.Context, project domain.Project, req SyncRequest) (SyncResponse, error) {
+	req = normalizeActor(req, "operator", "http_api")
 	preview, err := s.PreviewRepoToDB(project, req)
 	if err != nil {
 		return preview, err
@@ -255,7 +260,7 @@ func (s SyncService) ApplyRepoToDBWithRequest(ctx context.Context, project domai
 	}
 	defer tx.Rollback(ctx)
 	var syncRunID string
-	if err := tx.QueryRow(ctx, `INSERT INTO sync_runs(project_id,direction,status) VALUES($1,'REPO_TO_DB','running') RETURNING id`, project.ID).Scan(&syncRunID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO sync_runs(project_id,direction,status,actor_type,actor_name,transport) VALUES($1,'REPO_TO_DB','running',$2,$3,$4) RETURNING id`, project.ID, req.ActorType, req.ActorName, req.Transport).Scan(&syncRunID); err != nil {
 		return preview, err
 	}
 	for idx, item := range preview.Items {
@@ -321,8 +326,7 @@ func (s SyncService) plan(ctx context.Context, project domain.Project, req SyncR
 }
 
 func (s SyncService) writeProjectFiles(ctx context.Context, tx pgx.Tx, project domain.Project, items []SyncItem) error {
-	projectYAML := fmt.Sprintf("agentops:\n  project_id: %q\n  project_slug: %q\n  workspace_id: %q\n\nrepo:\n  name: %q\n  path_hint: %q\n  default_branch: %q\n\nsync:\n  source_of_truth: database\n  generated_at: %q\n  generated_by: agentops-workspace\n",
-		project.ID, project.Slug, project.WorkspaceID, project.Name, pathHint(project), project.DefaultBranch, time.Now().UTC().Format(time.RFC3339))
+	projectManifest := s.ProjectManifest(project)
 	lock := buildAssetsLock(project, items)
 	for _, item := range items {
 		if item.AssetID == "" || item.AssetVersionID == "" || item.DBChecksum == "" {
@@ -332,7 +336,7 @@ func (s SyncService) writeProjectFiles(ctx context.Context, tx pgx.Tx, project d
 			return err
 		}
 	}
-	files := map[string]string{".agentops/project.yaml": projectYAML, ".agentops/assets.lock.yaml": lock}
+	files := map[string]string{".codex/project.json": projectManifest, ".codex/sync/lock.json": lock}
 	for target, content := range files {
 		full, err := s.Guard.SafeTarget(project.RepoPath, target)
 		if err != nil {
@@ -343,6 +347,23 @@ func (s SyncService) writeProjectFiles(ctx context.Context, tx pgx.Tx, project d
 		}
 	}
 	return nil
+}
+
+func (s SyncService) ProjectManifest(project domain.Project) string {
+	return buildProjectManifest(project, s.MCPPublicURL)
+}
+
+func normalizeActor(req SyncRequest, actorType, transport string) SyncRequest {
+	if strings.TrimSpace(req.ActorType) == "" {
+		req.ActorType = actorType
+	}
+	if strings.TrimSpace(req.Transport) == "" {
+		req.Transport = transport
+	}
+	req.ActorType = strings.TrimSpace(req.ActorType)
+	req.ActorName = strings.TrimSpace(req.ActorName)
+	req.Transport = strings.TrimSpace(req.Transport)
+	return req
 }
 
 type projectAssetVersion struct {
@@ -386,42 +407,99 @@ func (s SyncService) projectAssetVersions(ctx context.Context, project domain.Pr
 }
 
 func buildAssetsLock(project domain.Project, items []SyncItem) string {
-	var b strings.Builder
-	b.WriteString("version: 1\n\nproject:\n")
-	b.WriteString(fmt.Sprintf("  id: %q\n  slug: %q\n\nassets:\n", project.ID, project.Slug))
+	type lockedAssetJSON struct {
+		AssetID         string `json:"asset_id"`
+		AssetVersionID  string `json:"asset_version_id"`
+		TemplateAssetID string `json:"template_asset_id,omitempty"`
+		Type            string `json:"type"`
+		Slug            string `json:"slug"`
+		Version         string `json:"version"`
+		TargetPath      string `json:"target_path"`
+		Checksum        string `json:"checksum"`
+		Generated       bool   `json:"generated"`
+	}
+	lock := struct {
+		Version int `json:"version"`
+		Project struct {
+			ID   string `json:"id"`
+			Slug string `json:"slug"`
+		} `json:"project"`
+		Assets []lockedAssetJSON `json:"assets"`
+	}{Version: 1}
+	lock.Project.ID = project.ID
+	lock.Project.Slug = project.Slug
 	for _, item := range items {
 		if item.AssetID == "" || item.AssetVersionID == "" || item.DBChecksum == "" {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("  - asset_id: %q\n", item.AssetID))
-		b.WriteString(fmt.Sprintf("    asset_version_id: %q\n", item.AssetVersionID))
-		if item.TemplateAssetID != "" {
-			b.WriteString(fmt.Sprintf("    template_asset_id: %q\n", item.TemplateAssetID))
-		}
-		b.WriteString(fmt.Sprintf("    type: %q\n    slug: %q\n    version: %q\n    target_path: %q\n    checksum: %q\n    generated: true\n", item.AssetType, item.AssetSlug, item.Version, item.TargetPath, item.DBChecksum))
+		lock.Assets = append(lock.Assets, lockedAssetJSON{
+			AssetID:         item.AssetID,
+			AssetVersionID:  item.AssetVersionID,
+			TemplateAssetID: item.TemplateAssetID,
+			Type:            item.AssetType,
+			Slug:            item.AssetSlug,
+			Version:         item.Version,
+			TargetPath:      item.TargetPath,
+			Checksum:        item.DBChecksum,
+			Generated:       true,
+		})
 	}
-	return b.String()
+	data, _ := json.MarshalIndent(lock, "", "  ")
+	return string(data) + "\n"
+}
+
+func buildProjectManifest(project domain.Project, mcpPublicURL string) string {
+	if strings.TrimSpace(mcpPublicURL) == "" {
+		mcpPublicURL = "/mcp"
+	}
+	manifest := map[string]any{
+		"version": 1,
+		"project": map[string]string{
+			"id":           project.ID,
+			"slug":         project.Slug,
+			"workspace_id": project.WorkspaceID,
+		},
+		"repo": map[string]string{
+			"name":           project.Name,
+			"path_hint":      pathHint(project),
+			"default_branch": project.DefaultBranch,
+		},
+		"sync": map[string]string{
+			"source_of_truth": "database",
+			"generated_at":    time.Now().UTC().Format(time.RFC3339),
+			"generated_by":    "agentops-workspace",
+			"filesystem":      "codex",
+		},
+		"mcp": map[string]string{
+			"server_name": "agentops",
+			"endpoint":    mcpPublicURL,
+			"auth":        "bearer_token_env",
+			"token_env":   "AGENTOPS_MCP_TOKEN",
+		},
+	}
+	data, _ := json.MarshalIndent(manifest, "", "  ")
+	return string(data) + "\n"
 }
 
 type lockedAsset struct {
-	AssetID         string `yaml:"asset_id"`
-	AssetVersionID  string `yaml:"asset_version_id"`
-	TemplateAssetID string `yaml:"template_asset_id"`
-	Type            string `yaml:"type"`
-	Slug            string `yaml:"slug"`
-	TargetPath      string `yaml:"target_path"`
-	Checksum        string `yaml:"checksum"`
+	AssetID         string `json:"asset_id" yaml:"asset_id"`
+	AssetVersionID  string `json:"asset_version_id" yaml:"asset_version_id"`
+	TemplateAssetID string `json:"template_asset_id" yaml:"template_asset_id"`
+	Type            string `json:"type" yaml:"type"`
+	Slug            string `json:"slug" yaml:"slug"`
+	TargetPath      string `json:"target_path" yaml:"target_path"`
+	Checksum        string `json:"checksum" yaml:"checksum"`
 }
 
 func readLockedAsset(repoPath, target string) *lockedAsset {
-	data, err := os.ReadFile(filepath.Join(repoPath, ".agentops", "assets.lock.yaml"))
+	data, err := os.ReadFile(filepath.Join(repoPath, ".codex", "sync", "lock.json"))
 	if err != nil {
 		return nil
 	}
 	var lock struct {
-		Assets []lockedAsset `yaml:"assets"`
+		Assets []lockedAsset `json:"assets" yaml:"assets"`
 	}
-	if err := yaml.Unmarshal(data, &lock); err != nil {
+	if err := json.Unmarshal(data, &lock); err != nil {
 		return nil
 	}
 	for _, asset := range lock.Assets {
@@ -552,13 +630,13 @@ func renderManagedFileWithMetadata(asset domain.Asset, version domain.AssetVersi
 		templateLine = fmt.Sprintf("  template_asset_id: %q\n", templateAssetID)
 	}
 	if version.ContentFormat == "markdown" || strings.HasSuffix(targetPath(asset.Type, asset.Slug), ".md") {
-		return fmt.Sprintf("<!--\nagentops:\n  generated: true\n  asset_id: %q\n  asset_slug: %q\n  asset_type: %q\n  asset_version_id: %q\n%s  version: %q\n  checksum: %q\n  source_of_truth: database\n  do_not_edit: false\n-->\n\n%s", asset.ID, slug, asset.Type, version.ID, templateLine, version.Version, version.Checksum, version.Content)
+		return fmt.Sprintf("<!--\ncodex:\n  generated: true\n  asset_id: %q\n  asset_slug: %q\n  asset_type: %q\n  asset_version_id: %q\n%s  version: %q\n  checksum: %q\n  source_of_truth: database\n  do_not_edit: false\n-->\n\n%s", asset.ID, slug, asset.Type, version.ID, templateLine, version.Version, version.Checksum, version.Content)
 	}
 	commentTemplateLine := ""
 	if templateAssetID != "" {
 		commentTemplateLine = fmt.Sprintf("#   template_asset_id: %q\n", templateAssetID)
 	}
-	return fmt.Sprintf("# agentops:\n#   generated: true\n#   asset_id: %q\n#   asset_slug: %q\n#   asset_type: %q\n#   asset_version_id: %q\n%s#   version: %q\n#   checksum: %q\n#   source_of_truth: database\n#   do_not_edit: false\n\n%s", asset.ID, slug, asset.Type, version.ID, commentTemplateLine, version.Version, version.Checksum, version.Content)
+	return fmt.Sprintf("# codex:\n#   generated: true\n#   asset_id: %q\n#   asset_slug: %q\n#   asset_type: %q\n#   asset_version_id: %q\n%s#   version: %q\n#   checksum: %q\n#   source_of_truth: database\n#   do_not_edit: false\n\n%s", asset.ID, slug, asset.Type, version.ID, commentTemplateLine, version.Version, version.Checksum, version.Content)
 }
 
 func targetPath(assetType, slug string) string {
@@ -568,19 +646,21 @@ func targetPath(assetType, slug string) string {
 	case "readme":
 		return "README.md"
 	case "skill_doc":
-		return filepath.ToSlash(filepath.Join("docs/agentic/skills", slug+".md"))
+		return filepath.ToSlash(filepath.Join(".codex/skills", slug, "SKILL.md"))
 	case "subagent_doc":
-		return filepath.ToSlash(filepath.Join("docs/agentic/subagents", slug+".md"))
+		return filepath.ToSlash(filepath.Join(".codex/agents", slug+".toml"))
 	case "policy_doc":
-		return filepath.ToSlash(filepath.Join("docs/agentic/policies", slug+".md"))
+		return filepath.ToSlash(filepath.Join(".codex/policies", slug+".md"))
 	case "workflow_doc":
-		return filepath.ToSlash(filepath.Join("docs/agentic/workflows", slug+".workflow.yaml"))
+		return filepath.ToSlash(filepath.Join(".codex/workflows", slug+".workflow.yaml"))
 	case "prompt_template":
-		return filepath.ToSlash(filepath.Join("docs/agentic/prompts", slug+".md"))
+		return filepath.ToSlash(filepath.Join(".codex/prompts", slug+".md"))
 	case "checklist":
-		return filepath.ToSlash(filepath.Join("docs/agentic/checklists", slug+".md"))
+		return filepath.ToSlash(filepath.Join(".codex/checklists", slug+".md"))
 	case "run_report_contract":
-		return "docs/agentic/contracts/run-report-contract.md"
+		return ".codex/reports/run-report-contract.md"
+	case "context_doc":
+		return filepath.ToSlash(filepath.Join(".codex/assets/context", slug+".md"))
 	default:
 		return ""
 	}
@@ -607,25 +687,31 @@ func plannedTarget(items []SyncItem, target string) bool {
 
 func scanManagedRepoFiles(repoPath string) ([]string, error) {
 	var out []string
-	for _, rootTarget := range []string{"AGENTS.md", "README.md", ".agentops/project.yaml", ".agentops/assets.lock.yaml"} {
+	for _, rootTarget := range []string{"AGENTS.md", "README.md", ".codex/project.json", ".codex/sync/lock.json"} {
 		if _, err := os.Stat(filepath.Join(repoPath, filepath.FromSlash(rootTarget))); err == nil {
 			out = append(out, rootTarget)
 		}
 	}
-	base := filepath.Join(repoPath, "docs", "agentic")
-	if _, err := os.Stat(base); err == nil {
-		err := filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
+	for _, base := range []string{".codex"} {
+		root := filepath.Join(repoPath, base)
+		if _, err := os.Stat(root); err != nil {
+			continue
+		}
+		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
-			}
-			if d.IsDir() {
-				return nil
 			}
 			rel, err := filepath.Rel(repoPath, path)
 			if err != nil {
 				return err
 			}
 			rel = filepath.ToSlash(rel)
+			if d.IsDir() {
+				if ignoredDirs[d.Name()] || scanDepth(rel) > maxScanDepth {
+					return filepath.SkipDir
+				}
+				return nil
+			}
 			if typ, _ := classifyManagedFile(rel); typ != "" {
 				out = append(out, rel)
 			}
@@ -635,6 +721,39 @@ func scanManagedRepoFiles(repoPath string) ([]string, error) {
 			return nil, err
 		}
 	}
+	err := filepath.WalkDir(repoPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(repoPath, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			return nil
+		}
+		if d.IsDir() {
+			if ignoredDirs[d.Name()] || scanDepth(rel) > maxScanDepth {
+				return filepath.SkipDir
+			}
+			if rel == ".codex" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(strings.ToLower(rel), ".md") {
+			if typ, _ := classifyManagedFile(rel); typ != "" {
+				out = append(out, rel)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(out)
+	out = slices.Compact(out)
 	return out, nil
 }
 
@@ -645,22 +764,26 @@ func classifyManagedFile(target string) (string, string) {
 		return "agents_md", "repo-agents"
 	case target == "README.md":
 		return "readme", "repo-readme"
-	case strings.HasPrefix(target, "docs/agentic/skills/") && strings.HasSuffix(target, ".md"):
-		return "skill_doc", trimExt(filepath.Base(target))
-	case strings.HasPrefix(target, "docs/agentic/subagents/") && strings.HasSuffix(target, ".md"):
+	case strings.HasPrefix(target, ".codex/agents/") && strings.HasSuffix(target, ".toml"):
 		return "subagent_doc", trimExt(filepath.Base(target))
-	case strings.HasPrefix(target, "docs/agentic/policies/") && strings.HasSuffix(target, ".md"):
+	case strings.HasPrefix(target, ".codex/skills/") && strings.HasSuffix(target, "/SKILL.md"):
+		return "skill_doc", safeAssetSlug(strings.TrimSuffix(strings.TrimPrefix(target, ".codex/skills/"), "/SKILL.md"))
+	case strings.HasPrefix(target, ".codex/skills/") && strings.HasSuffix(target, ".md"):
+		return "skill_doc", safeAssetSlug(strings.TrimSuffix(strings.TrimPrefix(target, ".codex/skills/"), ".md"))
+	case strings.HasPrefix(target, ".codex/policies/") && strings.HasSuffix(target, ".md"):
 		return "policy_doc", trimExt(filepath.Base(target))
-	case strings.HasPrefix(target, "docs/agentic/workflows/") && (strings.HasSuffix(target, ".workflow.yaml") || strings.HasSuffix(target, ".workflow.yml")):
-		return "workflow_doc", strings.TrimSuffix(strings.TrimSuffix(filepath.Base(target), ".workflow.yaml"), ".workflow.yml")
-	case strings.HasPrefix(target, "docs/agentic/workflows/") && (strings.HasSuffix(target, ".md") || strings.HasSuffix(target, ".yaml") || strings.HasSuffix(target, ".yml")):
+	case strings.HasPrefix(target, ".codex/workflows/") && (strings.HasSuffix(target, ".md") || strings.HasSuffix(target, ".yaml") || strings.HasSuffix(target, ".yml")):
 		return "workflow_doc", trimExt(filepath.Base(target))
-	case strings.HasPrefix(target, "docs/agentic/prompts/"):
+	case strings.HasPrefix(target, ".codex/prompts/"):
 		return "prompt_template", trimExt(filepath.Base(target))
-	case strings.HasPrefix(target, "docs/agentic/checklists/"):
+	case strings.HasPrefix(target, ".codex/checklists/"):
 		return "checklist", trimExt(filepath.Base(target))
-	case target == "docs/agentic/contracts/run-report-contract.md":
+	case target == ".codex/reports/run-report-contract.md":
 		return "run_report_contract", "run-report-contract"
+	case strings.HasPrefix(target, ".codex/") && strings.HasSuffix(target, ".md"):
+		return "context_doc", safeAssetSlug(strings.TrimSuffix(strings.TrimPrefix(target, ".codex/"), ".md"))
+	case strings.HasSuffix(target, ".md"):
+		return "context_doc", safeAssetSlug(strings.TrimSuffix(target, ".md"))
 	default:
 		return "", ""
 	}
@@ -673,7 +796,7 @@ func stripAgentOpsHeader(content string) string {
 			return strings.TrimSpace(trimmed[idx+3:])
 		}
 	}
-	if strings.HasPrefix(trimmed, "# agentops:") {
+	if strings.HasPrefix(trimmed, "# agentops:") || strings.HasPrefix(trimmed, "# codex:") {
 		lines := strings.Split(trimmed, "\n")
 		i := 0
 		for i < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i]), "#") {
@@ -691,7 +814,7 @@ func parseAgentOpsHeader(content string) map[string]string {
 		if idx := strings.Index(trimmed, "-->"); idx >= 0 {
 			header = trimmed[:idx]
 		}
-	} else if strings.HasPrefix(trimmed, "# agentops:") {
+	} else if strings.HasPrefix(trimmed, "# agentops:") || strings.HasPrefix(trimmed, "# codex:") {
 		lines := strings.Split(trimmed, "\n")
 		var headerLines []string
 		for _, line := range lines {
@@ -702,7 +825,7 @@ func parseAgentOpsHeader(content string) map[string]string {
 		}
 		header = strings.Join(headerLines, "\n")
 	}
-	if header == "" || !strings.Contains(header, "agentops:") {
+	if header == "" || (!strings.Contains(header, "agentops:") && !strings.Contains(header, "codex:")) {
 		return nil
 	}
 	out := map[string]string{}
@@ -735,7 +858,30 @@ func contentFormatForTarget(target string) string {
 }
 
 func trimExt(name string) string {
-	return strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml"), ".md")
+	return strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml"), ".toml"), ".md")
+}
+
+func safeAssetSlug(value string) string {
+	value = strings.ToLower(filepath.ToSlash(value))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if ok {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	if slug == "" {
+		return "context"
+	}
+	return slug
 }
 
 func titleCase(value string) string {
@@ -856,7 +1002,7 @@ func (s SyncService) backupFile(project domain.Project, target string) (string, 
 	if err != nil {
 		return "", err
 	}
-	backupTarget := filepath.ToSlash(filepath.Join(".agentops", "backups", time.Now().UTC().Format("20060102T150405"), target))
+	backupTarget := filepath.ToSlash(filepath.Join(".codex", "sync", "backups", time.Now().UTC().Format("20060102T150405"), target))
 	dest, err := s.Guard.SafeTarget(project.RepoPath, backupTarget)
 	if err != nil {
 		return "", err

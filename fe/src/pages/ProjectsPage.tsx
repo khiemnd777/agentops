@@ -189,7 +189,9 @@ function ProjectForm({ onCreated }: { onCreated: () => void }) {
       const project = await post<Project>('/api/projects', { ...form, create_repo_path: createRepoPath });
       setMissingRepoPath('');
       setCreated(project);
-      setActiveStep(2);
+      const scanResult = await post<ProjectScanResponse>(`/api/projects/${project.id}/scan`);
+      setScan(scanResult);
+      setActiveStep(3);
       onCreated();
       window.dispatchEvent(new CustomEvent('agentops:projects-changed'));
     } catch (e) {
@@ -305,6 +307,8 @@ function ScanResultsPanel({ scan }: { scan: ProjectScanResponse | null }) {
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
         <Chip size="small" label={`${scan.scanned_files} files scanned`} />
         <Chip size="small" label={`${scan.candidates.length} candidates`} color={scan.candidates.length ? 'primary' : 'default'} variant="outlined" />
+        {scan.private && <Chip size="small" label={`private .codex: ${scan.private.candidates.length}`} variant="outlined" />}
+        {scan.global && <Chip size="small" label={`global .codex: ${scan.global.exists ? scan.global.candidates.length : 'not found'}`} variant="outlined" />}
         {scan.git_repo && <Chip size="small" label="git repo" variant="outlined" />}
         {scan.truncated && <Chip size="small" label="truncated" color="warning" />}
       </Stack>

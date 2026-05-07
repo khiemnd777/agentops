@@ -32,7 +32,21 @@ type Project struct {
 type RepoScanResult struct {
 	ProjectID    string              `json:"project_id,omitempty"`
 	RepoPath     string              `json:"repo_path"`
+	PrivatePath  string              `json:"private_path,omitempty"`
+	GlobalPath   string              `json:"global_path,omitempty"`
 	GitRepo      bool                `json:"git_repo"`
+	Readable     bool                `json:"readable"`
+	ScannedFiles int                 `json:"scanned_files"`
+	Candidates   []RepoScanCandidate `json:"candidates"`
+	Private      *RepoScanSection    `json:"private,omitempty"`
+	Global       *RepoScanSection    `json:"global,omitempty"`
+	IgnoredDirs  []string            `json:"ignored_dirs"`
+	Truncated    bool                `json:"truncated"`
+}
+
+type RepoScanSection struct {
+	Path         string              `json:"path"`
+	Exists       bool                `json:"exists"`
 	Readable     bool                `json:"readable"`
 	ScannedFiles int                 `json:"scanned_files"`
 	Candidates   []RepoScanCandidate `json:"candidates"`

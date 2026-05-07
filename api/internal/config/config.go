@@ -9,10 +9,13 @@ import (
 )
 
 type Config struct {
-	APIAddr     string
-	DatabaseURL string
-	AuthEnabled bool
-	RunImport   RunImportConfig
+	APIAddr       string
+	DatabaseURL   string
+	AuthEnabled   bool
+	MCPToken      string
+	PublicBaseURL string
+	MCPPublicURL  string
+	RunImport     RunImportConfig
 }
 
 type RunImportConfig struct {
@@ -27,19 +30,36 @@ type RunImportConfig struct {
 
 func Load() Config {
 	return Config{
-		APIAddr:     env("API_ADDR", ":8080"),
-		DatabaseURL: databaseURL(),
-		AuthEnabled: strings.EqualFold(env("AUTH_ENABLED", "false"), "true"),
+		APIAddr:       env("API_ADDR", ":8080"),
+		DatabaseURL:   databaseURL(),
+		AuthEnabled:   strings.EqualFold(env("AUTH_ENABLED", "false"), "true"),
+		MCPToken:      env("AGENTOPS_MCP_TOKEN", ""),
+		PublicBaseURL: publicBaseURL(),
+		MCPPublicURL:  mcpPublicURL(),
 		RunImport: RunImportConfig{
 			AutoImportOnReviewOpen:   true,
 			AutoImportOnTaskListOpen: true,
 			DebounceSeconds:          30,
 			MaxReportsPerScan:        100,
-			ReportGlob:               ".agentops/runs/*/run.report.json",
+			ReportGlob:               ".codex/reports/runs/*/run.report.json",
 			StalePolicy:              "show_last_valid",
 			UpdatePolicy:             "import_new_revision",
 		},
 	}
+}
+
+func mcpPublicURL() string {
+	if v := env("AGENTOPS_MCP_PUBLIC_URL", ""); v != "" {
+		return v
+	}
+	return strings.TrimRight(publicBaseURL(), "/") + "/mcp"
+}
+
+func publicBaseURL() string {
+	if v := env("AGENTOPS_PUBLIC_BASE_URL", ""); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "http://localhost:" + env("API_HOST_PORT", env("API_CONTAINER_PORT", "8080"))
 }
 
 func env(key, fallback string) string {

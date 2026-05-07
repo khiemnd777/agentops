@@ -16,4 +16,6 @@ These files are not AgentOps product assets. Do not sync them into mounted proje
 
 ## Core Rule
 
-Keep the implementation aligned with the MVP boundary: manage assets, sync files, import reports, audit runs, and render playback. Do not add direct agent execution.
+Keep the implementation aligned with the MVP boundary: manage assets, sync Codex-native project files, import reports, audit runs, and render playback. Do not add direct agent execution inside the web app/API.
+
+For the remake direction, see `docs/agent-first-codex-remake.md`.

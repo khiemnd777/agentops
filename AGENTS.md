@@ -19,11 +19,23 @@ Read these first when entering the repo:
 
 ## Product Boundary
 
-The MVP does not execute Codex or other coding agents directly. Keep runner work behind the future `AgentRunner` interface only. The implemented task review flow is file-based: external agents write `.agentops/runs/{run_id}/run.report.json`, then this app imports, validates, audits, and renders playback.
+The MVP does not execute Codex or other coding agents directly. Keep runner work behind the future `AgentRunner` interface only. The implemented task review flow is file-based: external agents write `.codex/reports/runs/{run_id}/run.report.json`, then this app imports, validates, audits, and renders playback.
 
 ## Source Of Truth
 
 PostgreSQL is canonical for AgentOps assets, versions, chunks, workflow templates, task runs, reviews, and sync state. Physical files in mounted repositories are generated/materialized projections. Repo file imports may create draft versions only; never overwrite published database versions from repo content.
+
+## AgentOps Local Agent
+
+For AgentOps-local sync tasks, prefer the `agentops` CLI. From this repository, run it with:
+
+- `cd api && go run ./cmd/agentops project manifest --project <slug-or-id>`
+- `cd api && go run ./cmd/agentops sync preview --project <slug-or-id> --mode files-to-db`
+- `cd api && go run ./cmd/agentops sync files-to-db --project <slug-or-id>`
+- `cd api && go run ./cmd/agentops sync db-to-files --project <slug-or-id>`
+- `cd api && go run ./cmd/agentops report import --project <slug-or-id>`
+
+Do not call MCP for local AgentOps maintenance unless explicitly testing MCP behavior. MCP is primarily for project repo agents.
 
 ## Required Local Skillset
 
@@ -54,6 +66,12 @@ Follow `.codex/policies/` for:
 - MVP no-agent-execution boundary.
 - Report import security.
 - Verification expectations.
+
+## Collaboration Defaults
+
+- Do not start long-running local dev servers such as `npm run dev` unless the user explicitly asks for it.
+- Do not implement code changes by default. First produce a plan and wait for the user's approval before editing files, unless the user explicitly asks for immediate implementation.
+- For UI-related requests, provide a text mockup for review and wait for the user's approval before implementation.
 
 ## Standard Change Workflow
 

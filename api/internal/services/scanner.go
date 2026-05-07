@@ -16,10 +16,10 @@ var ignoredDirs = map[string]bool{
 }
 
 var managedFiles = map[string]bool{
-	"AGENTS.md":                  true,
-	"README.md":                  true,
-	".agentops/project.yaml":     true,
-	".agentops/assets.lock.yaml": true,
+	"AGENTS.md":             true,
+	"README.md":             true,
+	".codex/project.json":   true,
+	".codex/sync/lock.json": true,
 }
 
 type RepoScanner struct{}
@@ -48,12 +48,19 @@ func (RepoScanner) Tree(repoPath string, maxDepth int, showManaged bool) (domain
 }
 
 func (RepoScanner) Detect(repoPath string) (domain.RepoScanResult, error) {
+	privatePath := filepath.Join(repoPath, ".codex")
 	result := domain.RepoScanResult{
 		RepoPath:    repoPath,
+		PrivatePath: privatePath,
 		GitRepo:     exists(filepath.Join(repoPath, ".git")),
 		Readable:    isReadable(repoPath),
 		Candidates:  []domain.RepoScanCandidate{},
 		IgnoredDirs: []string{},
+		Private:     scanSection(privatePath),
+		Global:      scanGlobalCodexSection(),
+	}
+	if result.Global != nil {
+		result.GlobalPath = result.Global.Path
 	}
 	seenCandidates := map[string]bool{}
 	seenIgnored := map[string]bool{}
@@ -114,6 +121,78 @@ func (RepoScanner) Detect(repoPath string) (domain.RepoScanResult, error) {
 	return result, err
 }
 
+func scanGlobalCodexSection() *domain.RepoScanSection {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	return scanSection(filepath.Join(home, ".codex"))
+}
+
+func scanSection(path string) *domain.RepoScanSection {
+	section := &domain.RepoScanSection{
+		Path:        path,
+		Exists:      exists(path),
+		Readable:    isReadable(path),
+		Candidates:  []domain.RepoScanCandidate{},
+		IgnoredDirs: []string{},
+	}
+	if !section.Exists {
+		return section
+	}
+	seenCandidates := map[string]bool{}
+	seenIgnored := map[string]bool{}
+	err := filepath.WalkDir(path, func(current string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(path, current)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			return nil
+		}
+		if d.IsDir() {
+			name := d.Name()
+			if ignoredDirs[name] || scanDepth(rel) > maxScanDepth {
+				if !seenIgnored[rel] {
+					seenIgnored[rel] = true
+					section.IgnoredDirs = append(section.IgnoredDirs, rel)
+				}
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		section.ScannedFiles++
+		if len(section.Candidates) >= maxScanCandidates {
+			section.Truncated = true
+			return filepath.SkipAll
+		}
+		candidate, ok := classifyScanCandidate(path, rel, d)
+		if ok {
+			key := candidate.Kind + ":" + candidate.Path
+			if !seenCandidates[key] {
+				seenCandidates[key] = true
+				section.Candidates = append(section.Candidates, candidate)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		section.Readable = false
+	}
+	sort.Slice(section.Candidates, func(i, j int) bool {
+		if section.Candidates[i].Kind != section.Candidates[j].Kind {
+			return section.Candidates[i].Kind < section.Candidates[j].Kind
+		}
+		return section.Candidates[i].Path < section.Candidates[j].Path
+	})
+	sort.Strings(section.IgnoredDirs)
+	return section
+}
+
 func isReadable(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -164,7 +243,7 @@ func scanChildren(root, rel string, depth, maxDepth int, showManaged bool) ([]do
 }
 
 func isManagedTreeFile(path string) bool {
-	if managedFiles[path] || strings.HasPrefix(path, ".agentops/runs/") {
+	if managedFiles[path] || strings.HasPrefix(path, ".codex/reports/runs/") {
 		return true
 	}
 	typ, _ := classifyManagedFile(path)
@@ -213,18 +292,22 @@ func classifyScanCandidate(repoPath, rel string, d os.DirEntry) (domain.RepoScan
 	case strings.HasPrefix(rel, "agents/"):
 		candidate.Kind = "agents_directory_file"
 		candidate.Reason = "file inside agents directory"
+	case isRunReportPath(rel):
+		candidate.Kind = "run_report"
+		candidate.Reason = "Codex run report"
 	case strings.HasPrefix(rel, ".codex/"):
 		candidate.Kind = "dot_codex_directory_file"
 		candidate.Reason = "file inside .codex directory"
-	case isRunReportPath(rel):
-		candidate.Kind = "run_report"
-		candidate.Reason = "AgentOps run report"
 	case isReadmeMarkdown(name) && len(matches) > 0:
 		candidate.Kind = "agent_readme"
 		candidate.Reason = "README matched agent-related keywords"
-	case isMarkdown && len(matches) > 0:
+	case isMarkdown:
 		candidate.Kind = "agent_markdown"
-		candidate.Reason = "Markdown matched agent-related keywords"
+		if len(matches) > 0 {
+			candidate.Reason = "Markdown matched agent-related keywords"
+		} else {
+			candidate.Reason = "Markdown context file"
+		}
 	case isAgentOpsGenerated(rel):
 		candidate.Kind = "agentops_generated"
 		candidate.Reason = "known AgentOps generated file"
@@ -236,7 +319,7 @@ func classifyScanCandidate(repoPath, rel string, d os.DirEntry) (domain.RepoScan
 
 func isRunReportPath(path string) bool {
 	parts := strings.Split(path, "/")
-	return len(parts) == 4 && parts[0] == ".agentops" && parts[1] == "runs" && parts[3] == "run.report.json"
+	return len(parts) == 5 && parts[0] == ".codex" && parts[1] == "reports" && parts[2] == "runs" && parts[4] == "run.report.json"
 }
 
 func isReadmeMarkdown(name string) bool {
@@ -245,7 +328,7 @@ func isReadmeMarkdown(name string) bool {
 }
 
 func isAgentOpsGenerated(path string) bool {
-	if path == ".agentops/project.yaml" || path == ".agentops/assets.lock.yaml" {
+	if path == ".codex/project.json" || path == ".codex/sync/lock.json" {
 		return true
 	}
 	if path == "README.md" {

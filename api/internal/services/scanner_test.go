@@ -12,7 +12,7 @@ func TestRepoScannerTreeShowsDirectoriesAndManagedFiles(t *testing.T) {
 	root := t.TempDir()
 	mustMkdir(t, filepath.Join(root, "api"))
 	mustMkdir(t, filepath.Join(root, ".git"))
-	mustMkdir(t, filepath.Join(root, ".agentops"))
+	mustMkdir(t, filepath.Join(root, ".codex"))
 	if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -34,26 +34,26 @@ func TestRepoScannerTreeShowsDirectoriesAndManagedFiles(t *testing.T) {
 	}
 }
 
-func TestRepoScannerTreeShowsGeneratedAgenticDocs(t *testing.T) {
+func TestRepoScannerTreeShowsGeneratedCodexFiles(t *testing.T) {
 	root := t.TempDir()
-	mustWrite(t, filepath.Join(root, "docs", "agentic", "contracts", "run-report-contract.md"), "# Contract")
-	mustWrite(t, filepath.Join(root, "docs", "agentic", "policies", "noah-contract-sync.md"), "# Policy")
-	mustWrite(t, filepath.Join(root, "docs", "agentic", "skills", "noah-repo-architect.md"), "# Skill")
-	mustWrite(t, filepath.Join(root, "docs", "agentic", "workflows", "fullstack-feature-workflow.workflow.yaml"), "name: fullstack")
-	mustWrite(t, filepath.Join(root, "docs", "agentic", "workflows", "fullstack-feature-workflow.md"), "# Workflow")
-	mustWrite(t, filepath.Join(root, "docs", "agentic", "notes.txt"), "not managed")
+	mustWrite(t, filepath.Join(root, ".codex", "reports", "run-report-contract.md"), "# Contract")
+	mustWrite(t, filepath.Join(root, ".codex", "policies", "noah-contract-sync.md"), "# Policy")
+	mustWrite(t, filepath.Join(root, ".codex", "skills", "noah-repo-architect", "SKILL.md"), "# Skill")
+	mustWrite(t, filepath.Join(root, ".codex", "workflows", "fullstack-feature-workflow.workflow.yaml"), "name: fullstack")
+	mustWrite(t, filepath.Join(root, ".codex", "workflows", "fullstack-feature-workflow.md"), "# Workflow")
+	mustWrite(t, filepath.Join(root, ".codex", "notes.txt"), "not managed")
 
 	tree, err := (RepoScanner{}).Tree(root, 5, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertTreePath(t, tree, "docs/agentic/contracts/run-report-contract.md", "managed_file")
-	assertTreePath(t, tree, "docs/agentic/policies/noah-contract-sync.md", "managed_file")
-	assertTreePath(t, tree, "docs/agentic/skills/noah-repo-architect.md", "managed_file")
-	assertTreePath(t, tree, "docs/agentic/workflows/fullstack-feature-workflow.workflow.yaml", "managed_file")
-	assertTreePath(t, tree, "docs/agentic/workflows/fullstack-feature-workflow.md", "managed_file")
-	if hasTreePath(tree, "docs/agentic/notes.txt", "managed_file") {
-		t.Fatal("expected unrelated docs/agentic files to stay hidden")
+	assertTreePath(t, tree, ".codex/reports/run-report-contract.md", "managed_file")
+	assertTreePath(t, tree, ".codex/policies/noah-contract-sync.md", "managed_file")
+	assertTreePath(t, tree, ".codex/skills/noah-repo-architect/SKILL.md", "managed_file")
+	assertTreePath(t, tree, ".codex/workflows/fullstack-feature-workflow.workflow.yaml", "managed_file")
+	assertTreePath(t, tree, ".codex/workflows/fullstack-feature-workflow.md", "managed_file")
+	if hasTreePath(tree, ".codex/notes.txt", "managed_file") {
+		t.Fatal("expected unrelated .codex files to stay hidden")
 	}
 }
 
@@ -82,6 +82,10 @@ func TestRepoScannerDetectsAgentRelatedFilesAndDirectories(t *testing.T) {
 	assertCandidate(t, result, ".codex/config.toml", "dot_codex_directory_file")
 	assertCandidate(t, result, ".codex/agents/reviewer.toml", "dot_codex_directory_file")
 	assertCandidate(t, result, ".codex/skills/backend/SKILL.md", "dot_codex_directory_file")
+	if result.Private == nil || !result.Private.Exists {
+		t.Fatalf("expected private .codex scan section: %#v", result.Private)
+	}
+	assertCandidate(t, domain.RepoScanResult{Candidates: result.Private.Candidates}, "agents/reviewer.toml", "agents_directory_file")
 	if hasCandidate(result, "node_modules/pkg/AGENTS.md", "agents_file") {
 		t.Fatal("expected ignored directories to be skipped")
 	}
@@ -98,35 +102,33 @@ func TestRepoScannerDetectsAgentReadmesAndMarkdownByKeyword(t *testing.T) {
 	}
 	assertCandidate(t, result, "README.md", "agent_readme")
 	assertCandidate(t, result, "docs.md", "agent_markdown")
-	if hasCandidate(result, "plain.md", "agent_markdown") {
-		t.Fatal("expected unrelated markdown to be ignored")
-	}
+	assertCandidate(t, result, "plain.md", "agent_markdown")
 }
 
 func TestRepoScannerDetectIsReadOnlyAndReportsRunReports(t *testing.T) {
 	root := t.TempDir()
-	mustMkdir(t, filepath.Join(root, ".agentops", "runs", "run-1"))
-	mustWrite(t, filepath.Join(root, ".agentops", "runs", "run-1", "run.report.json"), `{"run_id":"run-1"}`)
+	mustMkdir(t, filepath.Join(root, ".codex", "reports", "runs", "run-1"))
+	mustWrite(t, filepath.Join(root, ".codex", "reports", "runs", "run-1", "run.report.json"), `{"run_id":"run-1"}`)
 	result, err := (RepoScanner{}).Detect(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertCandidate(t, result, ".agentops/runs/run-1/run.report.json", "run_report")
-	if _, err := os.Stat(filepath.Join(root, ".agentops-scan-write-test")); !os.IsNotExist(err) {
+	assertCandidate(t, result, ".codex/reports/runs/run-1/run.report.json", "run_report")
+	if _, err := os.Stat(filepath.Join(root, ".codex-scan-write-test")); !os.IsNotExist(err) {
 		t.Fatal("expected scanner to avoid write probes")
 	}
 }
 
 func TestManagedFileClassificationAndHeaderStrip(t *testing.T) {
-	typ, slug := classifyManagedFile("docs/agentic/skills/repo-architect.md")
+	typ, slug := classifyManagedFile(".codex/skills/repo-architect/SKILL.md")
 	if typ != "skill_doc" || slug != "repo-architect" {
 		t.Fatalf("unexpected classification: %s %s", typ, slug)
 	}
-	content := "<!--\nagentops:\n  generated: true\n-->\n\n# Skill\n"
+	content := "<!--\ncodex:\n  generated: true\n-->\n\n# Skill\n"
 	if got := stripAgentOpsHeader(content); got != "# Skill" {
 		t.Fatalf("unexpected stripped content: %q", got)
 	}
-	header := parseAgentOpsHeader("<!--\nagentops:\n  asset_slug: \"repo-architect\"\n  asset_type: \"skill_doc\"\n-->\n\n# Skill")
+	header := parseAgentOpsHeader("<!--\ncodex:\n  asset_slug: \"repo-architect\"\n  asset_type: \"skill_doc\"\n-->\n\n# Skill")
 	if header["asset_slug"] != "repo-architect" || header["asset_type"] != "skill_doc" {
 		t.Fatalf("unexpected parsed header: %#v", header)
 	}

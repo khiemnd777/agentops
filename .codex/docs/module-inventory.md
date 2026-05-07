@@ -20,6 +20,7 @@ This inventory maps product modules to source files so coding agents can find th
 | File | Description |
 | --- | --- |
 | `api/cmd/server/main.go` | Backend process entrypoint; loads config, connects DB, runs migrations/seeds, starts Fiber. |
+| `api/cmd/agentops/main.go` | AgentOps-local CLI entrypoint for project manifest, sync preview/apply, reconcile, and report import. |
 | `api/internal/app/app.go` | Fiber app construction, middleware, `/health`, `/api` group, handler registration. |
 | `api/internal/config/config.go` | Environment-backed config, auth flag, run import settings. |
 | `api/internal/db/db.go` | PostgreSQL connection pool and migration runner. |
@@ -57,7 +58,7 @@ Primary routes registered here:
 | `api/internal/services/checksum.go` | SHA-256 helpers for strings, bytes, and files. |
 | `api/internal/services/path_guard.go` | Repo path canonicalization and safe generated-file target validation for project repos. |
 | `api/internal/services/scanner.go` | Repo tree viewer, managed-file detection, scan preview helpers. |
-| `api/internal/services/sync.go` | DB-to-repo, repo-to-DB, compare-only sync planning/apply, managed file rendering, lock/project YAML generation, drift/diff/conflict actions. |
+| `api/internal/services/sync.go` | DB-to-repo, repo-to-DB, compare-only sync planning/apply, Codex-native managed file rendering, `.codex` manifest/lock generation, drift/diff/conflict actions. |
 | `api/internal/services/seeds.go` | Idempotent default workspace assets and workflow seed content. |
 | `api/internal/services/run_report.go` | Run report DTOs, JSON validation, timestamp validation, secret-like content detection. |
 | `api/internal/services/importer.go` | File-based run report scanner/importer, per-project in-memory lock, idempotency, transactional task run import, audit trigger. |

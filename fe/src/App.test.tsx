@@ -30,6 +30,10 @@ vi.mock('./pages/WorkflowsPage', () => ({
   WorkflowsPage: () => <div>Workflows</div>
 }));
 
+vi.mock('./pages/WorkspaceV2Page', () => ({
+  WorkspaceV2Page: () => <div>Workspace V2</div>
+}));
+
 describe('App', () => {
   beforeEach(() => {
     location.hash = '';
