@@ -42,6 +42,7 @@ func TestRepoScannerTreeShowsGeneratedCodexFiles(t *testing.T) {
 	mustWrite(t, filepath.Join(root, ".codex", "workflows", "fullstack-feature-workflow.workflow.yaml"), "name: fullstack")
 	mustWrite(t, filepath.Join(root, ".codex", "workflows", "fullstack-feature-workflow.md"), "# Workflow")
 	mustWrite(t, filepath.Join(root, ".codex", "notes.txt"), "not managed")
+	mustWrite(t, filepath.Join(root, "openai.yaml"), "model: gpt-5.2")
 
 	tree, err := (RepoScanner{}).Tree(root, 5, true)
 	if err != nil {
@@ -52,6 +53,7 @@ func TestRepoScannerTreeShowsGeneratedCodexFiles(t *testing.T) {
 	assertTreePath(t, tree, ".codex/skills/noah-repo-architect/SKILL.md", "managed_file")
 	assertTreePath(t, tree, ".codex/workflows/fullstack-feature-workflow.workflow.yaml", "managed_file")
 	assertTreePath(t, tree, ".codex/workflows/fullstack-feature-workflow.md", "managed_file")
+	assertTreePath(t, tree, "openai.yaml", "managed_file")
 	if hasTreePath(tree, ".codex/notes.txt", "managed_file") {
 		t.Fatal("expected unrelated .codex files to stay hidden")
 	}
@@ -65,6 +67,7 @@ func TestRepoScannerDetectsAgentRelatedFilesAndDirectories(t *testing.T) {
 	mustMkdir(t, filepath.Join(root, "node_modules", "pkg"))
 	mustWrite(t, filepath.Join(root, "AGENTS.md"), "agent instructions")
 	mustWrite(t, filepath.Join(root, "DESIGN.md"), "system design")
+	mustWrite(t, filepath.Join(root, "openai.yaml"), "model: gpt-5.2")
 	mustWrite(t, filepath.Join(root, "agents", "plan.md"), "local workflow")
 	mustWrite(t, filepath.Join(root, ".codex", "config.toml"), "[agents]\nmax_threads = 6")
 	mustWrite(t, filepath.Join(root, ".codex", "agents", "reviewer.toml"), `name = "reviewer"`)
@@ -76,6 +79,7 @@ func TestRepoScannerDetectsAgentRelatedFilesAndDirectories(t *testing.T) {
 	}
 	assertCandidate(t, result, "AGENTS.md", "agents_file")
 	assertCandidate(t, result, "DESIGN.md", "design_file")
+	assertCandidate(t, result, "openai.yaml", "openai_config")
 	assertCandidate(t, result, "agents", "agents_directory")
 	assertCandidate(t, result, ".codex", "dot_codex_directory")
 	assertCandidate(t, result, "agents/plan.md", "agents_directory_file")
@@ -88,6 +92,63 @@ func TestRepoScannerDetectsAgentRelatedFilesAndDirectories(t *testing.T) {
 	assertCandidate(t, domain.RepoScanResult{Candidates: result.Private.Candidates}, "agents/reviewer.toml", "agents_directory_file")
 	if hasCandidate(result, "node_modules/pkg/AGENTS.md", "agents_file") {
 		t.Fatal("expected ignored directories to be skipped")
+	}
+}
+
+func TestRepoScannerIgnoresNoiseDirsAndFiles(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, ".turbo"))
+	mustMkdir(t, filepath.Join(root, "__pycache__"))
+	mustMkdir(t, filepath.Join(root, "target"))
+	mustMkdir(t, filepath.Join(root, ".agentops"))
+	mustMkdir(t, filepath.Join(root, ".codex", "scripts"))
+	mustWrite(t, filepath.Join(root, ".turbo", "AGENTS.md"), "ignored")
+	mustWrite(t, filepath.Join(root, "target", "DESIGN.md"), "ignored")
+	mustWrite(t, filepath.Join(root, ".agentops", "AGENTS.md"), "ignored")
+	mustWrite(t, filepath.Join(root, ".agentops", "openai.yaml"), "ignored")
+	mustWrite(t, filepath.Join(root, ".codex", "scripts", "setup.md"), "ignored")
+	mustWrite(t, filepath.Join(root, ".codex", "scripts", "openai.yaml"), "ignored")
+	mustWrite(t, filepath.Join(root, "AGENTS.md"), "agent instructions")
+	if !shouldIgnoreDirPath(".agentops") || !shouldIgnoreDirPath(".codex/scripts") {
+		t.Fatal("expected .agentops and .codex/scripts to be ignored")
+	}
+	if shouldIgnoreDirPath("scripts") || shouldIgnoreDirPath(".codex/hooks") {
+		t.Fatal("expected generic scripts and .codex/hooks to remain scannable")
+	}
+	for _, path := range []string{".env", ".env.local", ".DS_Store", "npm-debug.log", "notes.md.swp"} {
+		if !shouldIgnoreFile(path) {
+			t.Fatalf("expected %s to be ignored", path)
+		}
+	}
+	for _, path := range []string{"DESIGN.md", "openai.yaml"} {
+		if shouldIgnoreFile(path) {
+			t.Fatalf("expected %s to remain scannable", path)
+		}
+	}
+
+	tree, err := (RepoScanner{}).Tree(root, 3, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasTreePath(tree, ".turbo", "directory") || hasTreePath(tree, "__pycache__", "directory") || hasTreePath(tree, "target", "directory") {
+		t.Fatalf("expected noisy directories to be hidden from tree: %#v", tree.Children)
+	}
+	if hasTreePath(tree, ".agentops", "directory") || hasTreePath(tree, ".codex/scripts", "directory") {
+		t.Fatalf("expected unsupported agent directories to be hidden from tree: %#v", tree.Children)
+	}
+
+	result, err := (RepoScanner{}).Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasCandidate(result, ".turbo/AGENTS.md", "agents_file") || hasCandidate(result, "target/DESIGN.md", "design_file") {
+		t.Fatalf("expected noisy directories to be skipped during detection: %#v", result.Candidates)
+	}
+	if hasCandidate(result, ".agentops/AGENTS.md", "agents_file") || hasCandidate(result, ".codex/scripts/setup.md", "dot_codex_directory_file") {
+		t.Fatalf("expected unsupported agent directories to be skipped during detection: %#v", result.Candidates)
+	}
+	if !containsString(result.IgnoredDirs, ".agentops") || !containsString(result.IgnoredDirs, ".codex/scripts") {
+		t.Fatalf("expected ignored dirs to include .agentops and .codex/scripts: %#v", result.IgnoredDirs)
 	}
 }
 
@@ -175,6 +236,15 @@ func assertCandidate(t *testing.T, result domain.RepoScanResult, path string, ki
 func hasCandidate(result domain.RepoScanResult, path string, kind string) bool {
 	for _, candidate := range result.Candidates {
 		if candidate.Path == path && candidate.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
 			return true
 		}
 	}

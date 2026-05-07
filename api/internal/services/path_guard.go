@@ -64,12 +64,19 @@ func (g PathGuard) SafeTargetForRead(repoPath, targetPath string) (string, error
 	return g.safeTarget(repoPath, targetPath, false)
 }
 
+func (g PathGuard) CanWriteTarget(targetPath string) bool {
+	return isAllowedGeneratedTarget(filepath.ToSlash(filepath.Clean(targetPath)))
+}
+
 func (g PathGuard) safeTarget(repoPath, targetPath string, createParent bool) (string, error) {
 	if strings.Contains(targetPath, "\x00") || filepath.IsAbs(targetPath) || hasTraversal(targetPath) {
 		return "", ErrUnsafePath
 	}
 	cleanTarget := filepath.ToSlash(filepath.Clean(targetPath))
-	if !isAllowedGeneratedTarget(cleanTarget) {
+	if createParent && !isAllowedGeneratedTarget(cleanTarget) {
+		return "", ErrUnsafePath
+	}
+	if !createParent && !isAllowedReadableTarget(cleanTarget) {
 		return "", ErrUnsafePath
 	}
 	repoReal, err := filepath.EvalSymlinks(repoPath)
@@ -115,6 +122,10 @@ func insidePath(root, path string) bool {
 	cleanRoot := filepath.Clean(root)
 	cleanPath := filepath.Clean(path)
 	return cleanPath == cleanRoot || strings.HasPrefix(cleanPath+string(os.PathSeparator), cleanRoot+string(os.PathSeparator))
+}
+
+func isAllowedReadableTarget(path string) bool {
+	return isAllowedGeneratedTarget(path) || isManagedTreeFile(path)
 }
 
 func isAllowedGeneratedTarget(path string) bool {

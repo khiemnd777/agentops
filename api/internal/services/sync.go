@@ -707,9 +707,12 @@ func scanManagedRepoFiles(repoPath string) ([]string, error) {
 			}
 			rel = filepath.ToSlash(rel)
 			if d.IsDir() {
-				if ignoredDirs[d.Name()] || scanDepth(rel) > maxScanDepth {
+				if shouldIgnoreDirPath(rel) || scanDepth(rel) > maxScanDepth {
 					return filepath.SkipDir
 				}
+				return nil
+			}
+			if shouldIgnoreFile(rel) {
 				return nil
 			}
 			if typ, _ := classifyManagedFile(rel); typ != "" {
@@ -734,7 +737,7 @@ func scanManagedRepoFiles(repoPath string) ([]string, error) {
 			return nil
 		}
 		if d.IsDir() {
-			if ignoredDirs[d.Name()] || scanDepth(rel) > maxScanDepth {
+			if shouldIgnoreDirPath(rel) || scanDepth(rel) > maxScanDepth {
 				return filepath.SkipDir
 			}
 			if rel == ".codex" {
@@ -742,10 +745,11 @@ func scanManagedRepoFiles(repoPath string) ([]string, error) {
 			}
 			return nil
 		}
-		if strings.HasSuffix(strings.ToLower(rel), ".md") {
-			if typ, _ := classifyManagedFile(rel); typ != "" {
-				out = append(out, rel)
-			}
+		if shouldIgnoreFile(rel) {
+			return nil
+		}
+		if typ, _ := classifyManagedFile(rel); typ != "" {
+			out = append(out, rel)
 		}
 		return nil
 	})
@@ -782,11 +786,18 @@ func classifyManagedFile(target string) (string, string) {
 		return "run_report_contract", "run-report-contract"
 	case strings.HasPrefix(target, ".codex/") && strings.HasSuffix(target, ".md"):
 		return "context_doc", safeAssetSlug(strings.TrimSuffix(strings.TrimPrefix(target, ".codex/"), ".md"))
+	case isOpenAIConfigPath(target):
+		return "context_doc", safeAssetSlug(trimExt(target))
 	case strings.HasSuffix(target, ".md"):
 		return "context_doc", safeAssetSlug(strings.TrimSuffix(target, ".md"))
 	default:
 		return "", ""
 	}
+}
+
+func isOpenAIConfigPath(target string) bool {
+	base := strings.ToLower(filepath.Base(filepath.ToSlash(target)))
+	return base == "openai.yaml" || base == "openai.yml"
 }
 
 func stripAgentOpsHeader(content string) string {

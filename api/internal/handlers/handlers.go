@@ -211,6 +211,7 @@ func (h Handler) repoFile(c *fiber.Ctx) error {
 		"size_bytes":  info.Size(),
 		"content":     string(data),
 		"modified_at": info.ModTime(),
+		"can_write":   h.Guard.CanWriteTarget(cleanTarget),
 	}, nil)
 }
 
@@ -254,6 +255,7 @@ func (h Handler) updateRepoFile(c *fiber.Ctx) error {
 		"size_bytes":  info.Size(),
 		"content":     req.Content,
 		"modified_at": info.ModTime(),
+		"can_write":   h.Guard.CanWriteTarget(cleanTarget),
 	}, nil)
 }
 

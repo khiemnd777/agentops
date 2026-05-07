@@ -22,6 +22,12 @@ func TestPathGuardAllowsOnlyRootsAndGeneratedTargets(t *testing.T) {
 	if _, err := guard.SafeTarget(repo, ".codex/skills/repo-architect/SKILL.md"); err != nil {
 		t.Fatalf("expected generated target to validate: %v", err)
 	}
+	if _, err := guard.SafeTargetForRead(repo, "DESIGN.md"); err != nil {
+		t.Fatalf("expected managed markdown target to validate for read: %v", err)
+	}
+	if _, err := guard.SafeTarget(repo, "DESIGN.md"); err == nil {
+		t.Fatal("expected managed markdown target write to be rejected")
+	}
 	if _, err := guard.SafeTarget(repo, "src/main.go"); err == nil {
 		t.Fatal("expected src write to be rejected")
 	}

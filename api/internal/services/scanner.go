@@ -12,7 +12,18 @@ import (
 
 var ignoredDirs = map[string]bool{
 	".git": true, "node_modules": true, "vendor": true, "dist": true, "build": true, "coverage": true,
-	"tmp": true, ".cache": true, ".next": true, ".nuxt": true, ".dart_tool": true, ".idea": true, ".vscode": true,
+	"tmp": true, "temp": true, ".cache": true, ".next": true, ".nuxt": true, ".dart_tool": true, ".idea": true, ".vscode": true,
+	".turbo": true, ".parcel-cache": true, ".pytest_cache": true, ".ruff_cache": true, ".mypy_cache": true, "__pycache__": true,
+	"target": true, "out": true, ".expo": true, ".serverless": true, ".terraform": true, ".gradle": true, "Pods": true, "DerivedData": true,
+	".venv": true, "venv": true, "env": true, ".bundle": true,
+}
+
+var ignoredFileNames = map[string]bool{
+	".DS_Store": true, "Thumbs.db": true, "desktop.ini": true,
+}
+
+var ignoredFileExts = map[string]bool{
+	".log": true, ".tmp": true, ".temp": true, ".bak": true, ".swp": true, ".swo": true, ".pyc": true, ".pyo": true,
 }
 
 var managedFiles = map[string]bool{
@@ -78,7 +89,7 @@ func (RepoScanner) Detect(repoPath string) (domain.RepoScanResult, error) {
 		}
 		if d.IsDir() {
 			name := d.Name()
-			if ignoredDirs[name] {
+			if shouldIgnoreDirPath(rel) {
 				if !seenIgnored[rel] {
 					seenIgnored[rel] = true
 					result.IgnoredDirs = append(result.IgnoredDirs, rel)
@@ -98,6 +109,9 @@ func (RepoScanner) Detect(repoPath string) (domain.RepoScanResult, error) {
 			case ".codex":
 				addScanCandidate(&result, seenCandidates, domain.RepoScanCandidate{Path: rel, Kind: "dot_codex_directory", Reason: "directory named .codex"})
 			}
+			return nil
+		}
+		if shouldIgnoreFile(rel) {
 			return nil
 		}
 		result.ScannedFiles++
@@ -155,14 +169,16 @@ func scanSection(path string) *domain.RepoScanSection {
 			return nil
 		}
 		if d.IsDir() {
-			name := d.Name()
-			if ignoredDirs[name] || scanDepth(rel) > maxScanDepth {
+			if shouldIgnoreDirPath(rel) || scanDepth(rel) > maxScanDepth {
 				if !seenIgnored[rel] {
 					seenIgnored[rel] = true
 					section.IgnoredDirs = append(section.IgnoredDirs, rel)
 				}
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if shouldIgnoreFile(rel) {
 			return nil
 		}
 		section.ScannedFiles++
@@ -219,7 +235,7 @@ func scanChildren(root, rel string, depth, maxDepth int, showManaged bool) ([]do
 			childRel = filepath.ToSlash(filepath.Join(rel, name))
 		}
 		if entry.IsDir() {
-			if ignoredDirs[name] {
+			if shouldIgnoreDirPath(childRel) {
 				continue
 			}
 			children, err := scanChildren(root, childRel, depth+1, maxDepth, showManaged)
@@ -227,6 +243,9 @@ func scanChildren(root, rel string, depth, maxDepth int, showManaged bool) ([]do
 				return nil, err
 			}
 			nodes = append(nodes, domain.RepoTreeNode{Name: name, Path: childRel, Type: "directory", Children: children})
+			continue
+		}
+		if shouldIgnoreFile(childRel) {
 			continue
 		}
 		if showManaged && isManagedTreeFile(childRel) {
@@ -255,6 +274,36 @@ func exists(path string) bool {
 	return err == nil
 }
 
+func shouldIgnoreDir(name string) bool {
+	return ignoredDirs[name]
+}
+
+func shouldIgnoreDirPath(path string) bool {
+	path = filepath.ToSlash(path)
+	if path == ".agentops" || strings.HasPrefix(path, ".agentops/") {
+		return true
+	}
+	if path == ".codex/scripts" || strings.HasPrefix(path, ".codex/scripts/") {
+		return true
+	}
+	return shouldIgnoreDir(filepath.Base(path))
+}
+
+func shouldIgnoreFile(path string) bool {
+	name := filepath.Base(filepath.ToSlash(path))
+	if ignoredFileNames[name] {
+		return true
+	}
+	lower := strings.ToLower(name)
+	if lower == ".env" || strings.HasPrefix(lower, ".env.") {
+		return true
+	}
+	if strings.HasSuffix(lower, "-debug.log") {
+		return true
+	}
+	return ignoredFileExts[strings.ToLower(filepath.Ext(lower))]
+}
+
 func addScanCandidate(result *domain.RepoScanResult, seen map[string]bool, candidate domain.RepoScanCandidate) {
 	key := candidate.Kind + ":" + candidate.Path
 	if seen[key] || len(result.Candidates) >= maxScanCandidates {
@@ -278,6 +327,7 @@ func classifyScanCandidate(repoPath, rel string, d os.DirEntry) (domain.RepoScan
 	pathLower := strings.ToLower(rel)
 	matches := matchedAgentKeywords(pathLower)
 	isMarkdown := strings.HasSuffix(base, ".md")
+	isYAML := strings.HasSuffix(base, ".yaml") || strings.HasSuffix(base, ".yml")
 	if isMarkdown {
 		matches = mergeKeywords(matches, matchedAgentKeywords(readKeywordSample(filepath.Join(repoPath, filepath.FromSlash(rel)))))
 	}
@@ -298,6 +348,9 @@ func classifyScanCandidate(repoPath, rel string, d os.DirEntry) (domain.RepoScan
 	case strings.HasPrefix(rel, ".codex/"):
 		candidate.Kind = "dot_codex_directory_file"
 		candidate.Reason = "file inside .codex directory"
+	case isOpenAIConfigPath(rel) && isYAML:
+		candidate.Kind = "openai_config"
+		candidate.Reason = "OpenAI configuration file"
 	case isReadmeMarkdown(name) && len(matches) > 0:
 		candidate.Kind = "agent_readme"
 		candidate.Reason = "README matched agent-related keywords"

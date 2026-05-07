@@ -1,6 +1,8 @@
 package services
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -78,6 +80,8 @@ func TestClassifyPrivateCodexContextFiles(t *testing.T) {
 		{".codex/agents/reviewer.toml", "subagent_doc", "reviewer"},
 		{".codex/skills/backend/SKILL.md", "skill_doc", "backend"},
 		{".codex/policies/db-source-of-truth.md", "policy_doc", "db-source-of-truth"},
+		{"openai.yaml", "context_doc", "openai"},
+		{"docs/agentic/openai.yml", "context_doc", "docs-agentic-openai"},
 		{"docs/architecture.md", "context_doc", "docs-architecture"},
 	}
 	for _, tt := range tests {
@@ -86,6 +90,53 @@ func TestClassifyPrivateCodexContextFiles(t *testing.T) {
 			t.Fatalf("classifyManagedFile(%q) = %s/%s, want %s/%s", tt.path, typ, slug, tt.typ, tt.slug)
 		}
 	}
+}
+
+func TestScanManagedRepoFilesIncludesOpenAIConfig(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "openai.yaml"), []byte("model: gpt-5.2"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "target"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "target", "openai.yaml"), []byte("ignored"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".agentops"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".agentops", "openai.yaml"), []byte("ignored"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".codex", "scripts"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".codex", "scripts", "setup.md"), []byte("ignored"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	files, err := scanManagedRepoFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slicesContains(files, "openai.yaml") {
+		t.Fatalf("expected openai.yaml in managed repo files: %#v", files)
+	}
+	if slicesContains(files, "target/openai.yaml") {
+		t.Fatalf("expected ignored directory file to be skipped: %#v", files)
+	}
+	if slicesContains(files, ".agentops/openai.yaml") || slicesContains(files, ".codex/scripts/setup.md") {
+		t.Fatalf("expected unsupported agent directories to be skipped: %#v", files)
+	}
+}
+
+func slicesContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestNormalizeActorDefaultsAndPreservesExplicitValues(t *testing.T) {

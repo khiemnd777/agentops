@@ -552,10 +552,92 @@ body {
 }
 
 .repo-file-empty,
-.repo-file-preview {
+.repo-file-preview,
+.repo-folder-preview {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.repo-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+  gap: 10px;
+}
+
+.repo-folder-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 118px;
+  padding: 12px 10px 10px;
+  border: 1px solid #e3e7e2;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  background: #fbfcfb;
+  cursor: pointer;
+}
+
+.repo-folder-thumb:hover,
+.repo-folder-thumb:focus-visible {
+  border-color: #bdd4cf;
+  background: #f5f9f7;
+  outline: none;
+}
+
+.repo-folder-thumb-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 54px;
+  border-radius: 6px;
+  background: #eef7f5;
+  color: #1f6f78;
+}
+
+.repo-folder-thumb-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 2px solid #fbfcfb;
+  border-radius: 999px;
+  background: #e7ece9;
+  color: #27322f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.repo-folder-thumb.file .repo-folder-thumb-icon {
+  background: #fff7ed;
+  color: #7a4e1d;
+}
+
+.repo-folder-thumb-text {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.repo-folder-thumb-name {
+  overflow: hidden;
+  color: #27322f;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .repo-file-loading,
