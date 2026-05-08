@@ -24,9 +24,11 @@ func New(ctx context.Context, cfg config.Config, db *pgxpool.Pool) (*fiber.App, 
 	importer := services.NewRunImporter(store, cfg.RunImport.MaxReportsPerScan)
 	h := handlers.Handler{
 		Store: store, Guard: guard, Scanner: services.RepoScanner{},
-		Sync:     services.SyncService{Store: store, Guard: guard, MCPPublicURL: cfg.MCPPublicURL},
-		Importer: importer,
-		Playback: services.PlaybackService{Store: store, Audit: services.AuditService{Store: store}},
+		Sync:          services.SyncService{Store: store, Guard: guard, MCPPublicURL: cfg.MCPPublicURL},
+		Importer:      importer,
+		Playback:      services.PlaybackService{Store: store, Audit: services.AuditService{Store: store}},
+		HostBridgeURL: cfg.HostBridgeURL,
+		MCPToken:      cfg.MCPToken,
 	}
 	app := fiber.New(fiber.Config{AppName: "AgentOps Workspace API"})
 	app.Use(recover.New())

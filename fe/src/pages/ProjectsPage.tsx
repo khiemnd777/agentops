@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, MenuItem, Paper, Stack, Step, StepLabel, Stepper, Tab, Tabs, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, MenuItem, Paper, Stack, Step, StepLabel, Stepper, Tab, Tabs, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import CheckIcon from '@mui/icons-material/Check';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import SyncIcon from '@mui/icons-material/Sync';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import { ApiError, del, get, post } from '../api/client';
-import type { Project, ProjectScanCandidate, ProjectScanResponse } from '../types';
+import type { CreateProjectRequest, PickFolderResponse, Project, ProjectScanCandidate, ProjectScanResponse } from '../types';
 import { RepoTree } from '../components/RepoTree';
 import { TaskRunsPanel } from '../components/TaskRunsPanel';
 import { ApplyPresetPanel, ProjectComposer } from '../components/ProjectComposer';
@@ -162,15 +164,40 @@ function ProjectContextTabs({ projectId, activeSection }: { projectId: string; a
   );
 }
 
+export function ProjectWizardDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (project: Project) => void }) {
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>Add project</DialogTitle>
+      <DialogContent>
+        <ProjectWizardContent onCreated={onCreated} />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function ProjectForm({ onCreated }: { onCreated: () => void }) {
-  const [form, setForm] = useState({ name: '', slug: '', repo_path: '', description: '', default_branch: 'main' });
+  return (
+    <Paper variant="outlined" className="form-panel">
+      <ProjectWizardContent onCreated={() => onCreated()} />
+    </Paper>
+  );
+}
+
+function ProjectWizardContent({ onCreated }: { onCreated: (project: Project) => void }) {
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
+  const [form, setForm] = useState({ name: '', slug: '', description: '', default_branch: 'main' });
+  const [selectedFolder, setSelectedFolder] = useState('');
+  const [pickingFolder, setPickingFolder] = useState(false);
   const [error, setError] = useState('');
   const [activeStep, setActiveStep] = useState(0);
   const [created, setCreated] = useState<Project | null>(null);
   const [scan, setScan] = useState<ProjectScanResponse | null>(null);
   const [preview, setPreview] = useState<unknown>(null);
-  const [missingRepoPath, setMissingRepoPath] = useState('');
-  const steps = ['Basic info', 'Repository location', 'Agent file scan', 'Apply preset', 'Write files', 'Complete'];
+  const steps = ['Project type', 'Folder selection', 'Agent file scan', 'Apply preset', 'Write files', 'Complete'];
+  const repoPath = selectedFolder;
 
   const update = (key: keyof typeof form, value: string) => setForm((f) => {
     if (key === 'name') {
@@ -183,23 +210,54 @@ function ProjectForm({ onCreated }: { onCreated: () => void }) {
     }
     return { ...f, [key]: value };
   });
-  const create = async (createRepoPath = false) => {
+  const create = async () => {
     setError('');
+    if (!form.name || !form.slug) {
+      setError('Project name and slug are required.');
+      return;
+    }
+    if (!repoPath) {
+      setError(mode === 'new' ? 'Choose a project folder before creating the project.' : 'Choose an existing project folder.');
+      return;
+    }
     try {
-      const project = await post<Project>('/api/projects', { ...form, create_repo_path: createRepoPath });
-      setMissingRepoPath('');
+      const payload: CreateProjectRequest = { ...form, repo_path: repoPath, create_repo_path: mode === 'new' };
+      const project = await post<Project>('/api/projects', payload);
       setCreated(project);
       const scanResult = await post<ProjectScanResponse>(`/api/projects/${project.id}/scan`);
       setScan(scanResult);
       setActiveStep(3);
-      onCreated();
+      onCreated(project);
       window.dispatchEvent(new CustomEvent('agentops:projects-changed'));
     } catch (e) {
       if (e instanceof ApiError && e.code === 'repo_path_not_found') {
-        setMissingRepoPath(form.repo_path);
+        setError(mode === 'existing' ? 'Choose a folder that already exists.' : 'The selected project folder could not be found.');
         return;
       }
       setError((e as Error).message);
+    }
+  };
+  const chooseFolder = async () => {
+    setPickingFolder(true);
+    setError('');
+    try {
+      const result = await post<PickFolderResponse>('/api/folders/pick', {
+        title: mode === 'new' ? 'Choose project folder' : 'Choose existing project folder'
+      });
+      const name = folderName(result.path);
+      setSelectedFolder(result.path);
+      setForm((current) => ({ ...current, name, slug: slugifyProjectName(name) }));
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'folder_picker_canceled') {
+        return;
+      }
+      if (e instanceof ApiError && e.code === 'host_bridge_unavailable') {
+        setError('Start AgentOps Host Bridge on the host machine, then choose the folder again: cd api && go run ./cmd/agentops host-bridge');
+        return;
+      }
+      setError((e as Error).message);
+    } finally {
+      setPickingFolder(false);
     }
   };
   const scanRepo = async () => {
@@ -210,48 +268,75 @@ function ProjectForm({ onCreated }: { onCreated: () => void }) {
   const applySync = async () => {
     if (!created) return;
     setPreview(await post(`/api/projects/${created.id}/sync/apply`, { mode: 'DB_TO_REPO' }));
-    setForm({ name: '', slug: '', repo_path: '', description: '', default_branch: 'main' });
+    setForm({ name: '', slug: '', description: '', default_branch: 'main' });
+    setSelectedFolder('');
     setCreated(null);
     setActiveStep(5);
-    onCreated();
     window.dispatchEvent(new CustomEvent('agentops:projects-changed'));
   };
 
   return (
-    <Paper variant="outlined" className="form-panel">
+    <Stack spacing={2} className="project-wizard">
       <Typography variant="h6">Project Initialization Wizard</Typography>
       <Stepper activeStep={activeStep} alternativeLabel>
         {steps.map((step) => <Step key={step}><StepLabel>{step}</StepLabel></Step>)}
       </Stepper>
       {error && <Alert severity="error">{error}</Alert>}
       {activeStep <= 1 && (
-        <>
+        <Stack spacing={2}>
+          <ToggleButtonGroup
+            exclusive
+            value={mode}
+            onChange={(_, value) => {
+              if (!value) return;
+              setMode(value);
+              setSelectedFolder('');
+              setError('');
+            }}
+            aria-label="Project creation mode"
+            size="small"
+          >
+            <ToggleButton value="new">Create new project</ToggleButton>
+            <ToggleButton value="existing">Add existing project</ToggleButton>
+          </ToggleButtonGroup>
+          <Paper variant="outlined" className="folder-selection-panel">
+            <Stack spacing={1}>
+              <Typography variant="subtitle2" fontWeight={800}>
+                {mode === 'new' ? 'Project folder' : 'Existing project folder'}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                <Button startIcon={<FolderOpenIcon />} variant="outlined" onClick={chooseFolder} disabled={pickingFolder}>
+                  {pickingFolder ? 'Opening folder picker...' : 'Choose folder'}
+                </Button>
+                {selectedFolder ? <Chip icon={<CheckIcon />} label="Folder selected" color="success" variant="outlined" /> : null}
+              </Stack>
+              {selectedFolder ? (
+                null
+              ) : (
+                <Alert severity="info">
+                  {mode === 'new' ? 'Choose the folder for this project.' : 'Choose the existing repository folder to add to AgentOps.'}
+                </Alert>
+              )}
+              {repoPath ? (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Project repository path</Typography>
+                  <Typography component="pre" className="selected-folder-path">{repoPath}</Typography>
+                </Box>
+              ) : null}
+            </Stack>
+          </Paper>
           <Box className="form-grid">
             <TextField label="Name" value={form.name} onChange={(e) => update('name', e.target.value)} />
             <TextField label="Slug" value={form.slug} onChange={(e) => update('slug', e.target.value)} />
-            <TextField label="Repository path" value={form.repo_path} onChange={(e) => update('repo_path', e.target.value)} />
             <TextField label="Default branch" value={form.default_branch} onChange={(e) => update('default_branch', e.target.value)} />
           </Box>
           <TextField fullWidth multiline minRows={2} label="Description" value={form.description} onChange={(e) => update('description', e.target.value)} />
           <Stack direction="row" spacing={1}>
             <Button variant="outlined" onClick={() => setActiveStep(Math.min(1, activeStep + 1))}>Next</Button>
-            <Button variant="contained" onClick={() => create()}>Validate and create</Button>
+            <Button variant="contained" onClick={create}>{mode === 'new' ? 'Create project' : 'Add project'}</Button>
           </Stack>
-        </>
+        </Stack>
       )}
-      <Dialog open={Boolean(missingRepoPath)} onClose={() => setMissingRepoPath('')}>
-        <DialogTitle>Create repository folder?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            The repository path does not exist. Create this folder and continue?
-          </DialogContentText>
-          <Typography component="pre" sx={{ mt: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{missingRepoPath}</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMissingRepoPath('')}>Cancel</Button>
-          <Button variant="contained" onClick={() => create(true)}>Create folder</Button>
-        </DialogActions>
-      </Dialog>
       {activeStep === 2 && (
         <Stack spacing={1}>
           <Typography variant="subtitle1" fontWeight={700}>Agent file scan</Typography>
@@ -268,12 +353,17 @@ function ProjectForm({ onCreated }: { onCreated: () => void }) {
       )}
       {activeStep === 4 && <WizardPanel title="Write project files to repo" action="Write project files to repo" onAction={applySync} data={preview} />}
       {activeStep === 5 && <Alert severity="success">Project initialized and synced.</Alert>}
-    </Paper>
+    </Stack>
   );
 }
 
 function slugifyProjectName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function folderName(path: string) {
+  const parts = path.split('/').filter(Boolean);
+  return parts[parts.length - 1] || path;
 }
 
 function WizardPanel({ title, action, onAction, data }: { title: string; action: string; onAction: () => void; data: unknown }) {

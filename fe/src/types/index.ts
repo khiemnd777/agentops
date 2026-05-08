@@ -13,6 +13,19 @@ export type Project = {
   updated_at?: string;
 };
 
+export type CreateProjectRequest = {
+  name: string;
+  slug: string;
+  repo_path: string;
+  description: string;
+  default_branch: string;
+  create_repo_path: boolean;
+};
+
+export type PickFolderResponse = {
+  path: string;
+};
+
 export type SyncItem = {
   target_path: string;
   action: string;

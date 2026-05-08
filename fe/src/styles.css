@@ -2,6 +2,26 @@ body {
   margin: 0;
 }
 
+.MuiTextField-root .MuiOutlinedInput-root {
+  min-height: 42px;
+}
+
+.MuiTextField-root .MuiOutlinedInput-input {
+  padding: 9px 12px;
+}
+
+.MuiTextField-root .MuiInputLabel-outlined:not(.MuiInputLabel-shrink) {
+  transform: translate(14px, 10px) scale(1);
+}
+
+.MuiTextField-root .MuiOutlinedInput-multiline {
+  padding: 8px 12px;
+}
+
+.MuiTextField-root .MuiOutlinedInput-multiline .MuiOutlinedInput-input {
+  padding: 0;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -130,6 +150,17 @@ body {
   background: #e7f2f2;
   border-radius: 8px;
   flex: 0 0 auto;
+}
+
+.workspace-v2-projects-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px 2px 20px;
+  color: #6a7471;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .workspace-v2-project-node > .MuiListItemButton-root {
@@ -287,6 +318,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.project-wizard {
+  width: 100%;
+}
+
+.folder-selection-panel {
+  padding: 14px;
+  background: #fbfcfa;
+}
+
+.selected-folder-path {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
 }
 
 .composer-profile-panel {

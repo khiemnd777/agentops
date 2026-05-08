@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -17,17 +19,20 @@ import (
 )
 
 type Handler struct {
-	Store    repo.Store
-	Guard    services.PathGuard
-	Scanner  services.RepoScanner
-	Sync     services.SyncService
-	Importer *services.RunImporter
-	Playback services.PlaybackService
+	Store         repo.Store
+	Guard         services.PathGuard
+	Scanner       services.RepoScanner
+	Sync          services.SyncService
+	Importer      *services.RunImporter
+	Playback      services.PlaybackService
+	HostBridgeURL string
+	MCPToken      string
 }
 
 func (h Handler) Register(api fiber.Router) {
 	api.Get("/workspace/default", h.defaultWorkspace)
 	api.Get("/dashboard", h.dashboard)
+	api.Post("/folders/pick", h.pickFolder)
 
 	api.Get("/projects", h.listProjects)
 	api.Post("/projects", h.createProject)
@@ -99,6 +104,76 @@ func (h Handler) dashboard(c *fiber.Ctx) error {
 		}
 	}
 	return respond(c, data, err)
+}
+
+var errFolderPickerCanceled = errors.New("folder picker canceled")
+
+func (h Handler) pickFolder(c *fiber.Ctx) error {
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(http.StatusBadRequest, err.Error())
+	}
+	path, err := h.pickFolderWithHostBridge(c.Context(), req.Title)
+	if err != nil {
+		if errors.Is(err, errFolderPickerCanceled) {
+			return structuredError(c, http.StatusBadRequest, "folder_picker_canceled", "folder selection was canceled")
+		}
+		return structuredError(c, http.StatusServiceUnavailable, "host_bridge_unavailable", err.Error())
+	}
+	safe, err := h.Guard.ValidateRepoPath(path)
+	if err != nil {
+		return structuredError(c, http.StatusBadRequest, "invalid_folder", err.Error())
+	}
+	return respond(c, fiber.Map{"path": safe}, nil)
+}
+
+func (h Handler) pickFolderWithHostBridge(ctx context.Context, title string) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = "Choose folder"
+	}
+	if h.HostBridgeURL == "" {
+		return "", errors.New("AgentOps Host Bridge is not configured")
+	}
+	payload, err := json.Marshal(fiber.Map{"title": title})
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.HostBridgeURL+"/pick-folder", bytes.NewReader(payload))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if h.MCPToken != "" {
+		req.Header.Set("X-AgentOps-Host-Bridge-Token", h.MCPToken)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", errors.New("start AgentOps Host Bridge on the host machine, then choose the folder again")
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	var out struct {
+		Path  string `json:"path"`
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	_ = json.Unmarshal(body, &out)
+	if res.StatusCode == http.StatusNoContent || out.Code == "folder_picker_canceled" {
+		return "", errFolderPickerCanceled
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		if out.Error != "" {
+			return "", errors.New(out.Error)
+		}
+		return "", errors.New(strings.TrimSpace(string(body)))
+	}
+	if strings.TrimSpace(out.Path) == "" {
+		return "", errFolderPickerCanceled
+	}
+	return out.Path, nil
 }
 
 func (h Handler) listProjects(c *fiber.Ctx) error {

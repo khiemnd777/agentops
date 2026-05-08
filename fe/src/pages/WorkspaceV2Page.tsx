@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Chip, Collapse, Divider, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Collapse, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, MenuItem, Paper, Stack, Tab, Tabs, TextField, Tooltip, Typography } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArticleIcon from '@mui/icons-material/Article';
@@ -11,6 +12,7 @@ import LanIcon from '@mui/icons-material/Lan';
 import SyncIcon from '@mui/icons-material/Sync';
 import { get, post } from '../api/client';
 import { RepoTree } from '../components/RepoTree';
+import { ProjectWizardDialog } from './ProjectsPage';
 import type { Project, SyncResponse, SyncRun } from '../types';
 
 type WorkspaceV2PageProps = {
@@ -29,8 +31,9 @@ export function WorkspaceV2Page({ projectId = '', section = 'repository' }: Work
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState('');
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [projectWizardOpen, setProjectWizardOpen] = useState(false);
 
-  useEffect(() => {
+  const loadProjects = () => {
     get<Project[] | null>('/api/projects')
       .then((items) => {
         const list = Array.isArray(items) ? items : [];
@@ -40,6 +43,10 @@ export function WorkspaceV2Page({ projectId = '', section = 'repository' }: Work
         }
       })
       .catch((e) => setError(e.message));
+  };
+
+  useEffect(() => {
+    loadProjects();
   }, [projectId]);
 
   const project = useMemo(() => projects.find((item) => item.id === projectId) || projects[0] || null, [projectId, projects]);
@@ -72,7 +79,14 @@ export function WorkspaceV2Page({ projectId = '', section = 'repository' }: Work
           </Stack>
         </Box>
         <Divider />
-        <Box className="sidebar-section-label">Projects</Box>
+        <Box className="workspace-v2-projects-header">
+          <Typography component="span">Projects</Typography>
+          <Tooltip title="Add project">
+            <IconButton size="small" aria-label="Add project" onClick={() => setProjectWizardOpen(true)}>
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
         <List className="sidebar-nav workspace-v2-projects" disablePadding>
           {projects.length === 0 && <Box className="sidebar-empty">No projects found.</Box>}
           {projects.map((item) => {
@@ -118,7 +132,7 @@ export function WorkspaceV2Page({ projectId = '', section = 'repository' }: Work
       </Box>
       <Box component="main" className="workspace-v2-content">
         {error && <Alert severity="warning">{error}</Alert>}
-        {!project && !error && <Alert severity="info">Create a project in the classic workspace before opening Workspace V2.</Alert>}
+        {!project && !error && <Alert severity="info">Create or add a project from the Projects panel.</Alert>}
         {project && (
           <Stack spacing={2}>
             <Box className="workspace-v2-header">
@@ -156,6 +170,16 @@ export function WorkspaceV2Page({ projectId = '', section = 'repository' }: Work
           </Stack>
         )}
       </Box>
+      <ProjectWizardDialog
+        open={projectWizardOpen}
+        onClose={() => setProjectWizardOpen(false)}
+        onCreated={(createdProject) => {
+          setProjectWizardOpen(false);
+          loadProjects();
+          window.dispatchEvent(new CustomEvent('agentops:projects-changed'));
+          location.hash = `#/workspace-v2/project/${createdProject.id}/repository`;
+        }}
+      />
     </Box>
   );
 }

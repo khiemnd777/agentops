@@ -39,6 +39,11 @@ function emptyScan() {
   };
 }
 
+async function chooseRepoFolder(path = '/repo/demo-project') {
+  fireEvent.click(screen.getByText('Choose folder'));
+  await screen.findAllByText(path);
+}
+
 describe('ProjectsPage', () => {
   afterEach(() => {
     cleanup();
@@ -55,12 +60,15 @@ describe('ProjectsPage', () => {
   it('renders the explicit create-first project initialization wizard', async () => {
     render(<ProjectsPage />);
     expect(await screen.findByText('Project Initialization Wizard')).toBeInTheDocument();
-    expect(screen.getByText('Basic info')).toBeInTheDocument();
-    expect(screen.getByText('Repository location')).toBeInTheDocument();
+    expect(screen.getByText('Project type')).toBeInTheDocument();
+    expect(screen.getByText('Folder selection')).toBeInTheDocument();
     expect(screen.getByText('Agent file scan')).toBeInTheDocument();
     expect(screen.getByText('Apply preset')).toBeInTheDocument();
     expect(screen.getByText('Write files')).toBeInTheDocument();
     expect(screen.getByText('Complete')).toBeInTheDocument();
+    expect(screen.getByText('Create new project')).toBeInTheDocument();
+    expect(screen.getByText('Add existing project')).toBeInTheDocument();
+    expect(screen.getByText('Choose folder')).toBeInTheDocument();
     expect(apiMock.post).not.toHaveBeenCalledWith(expect.stringContaining('/scan'), expect.anything());
   });
 
@@ -80,10 +88,10 @@ describe('ProjectsPage', () => {
     expect(slugInput).toHaveValue('demo-app');
   });
 
-  it('asks to create a missing repository path before creating the project', async () => {
+  it('creates a new project from a chosen project folder without manual path entry', async () => {
     apiMock.post.mockImplementation((path: string, body?: unknown) => {
-      if (path === '/api/projects' && !(body as { create_repo_path?: boolean }).create_repo_path) {
-        return Promise.reject(new apiMock.ApiError('repository path does not exist', 400, 'repo_path_not_found'));
+      if (path === '/api/folders/pick') {
+        return Promise.resolve({ path: '/repo/demo-project' });
       }
       if (path === '/api/projects') {
         return Promise.resolve({
@@ -103,17 +111,17 @@ describe('ProjectsPage', () => {
     });
 
     render(<ProjectsPage />);
-    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Demo' } });
-    fireEvent.change(screen.getByLabelText('Repository path'), { target: { value: '/repo/new-demo' } });
-    fireEvent.click(screen.getByText('Validate and create'));
-
-    expect(await screen.findByText('Create repository folder?')).toBeInTheDocument();
-    expect(screen.getByText('/repo/new-demo')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Create folder'));
+    await screen.findByLabelText('Name');
+    await chooseRepoFolder();
+    expect(apiMock.post).toHaveBeenCalledWith('/api/folders/pick', { title: 'Choose project folder' });
+    expect(screen.getByLabelText('Name')).toHaveValue('demo-project');
+    expect(screen.getByLabelText('Slug')).toHaveValue('demo-project');
+    fireEvent.click(screen.getByText('Create project'));
 
     await waitFor(() => expect(apiMock.post).toHaveBeenLastCalledWith('/api/projects', expect.objectContaining({
-      repo_path: '/repo/new-demo',
+      name: 'demo-project',
+      slug: 'demo-project',
+      repo_path: '/repo/demo-project',
       create_repo_path: true
     })));
     expect(await screen.findByText('Apply Preset')).toBeInTheDocument();
@@ -121,6 +129,9 @@ describe('ProjectsPage', () => {
 
   it('scans automatically after a project is created and renders grouped candidates', async () => {
     apiMock.post.mockImplementation((path: string) => {
+      if (path === '/api/folders/pick') {
+        return Promise.resolve({ path: '/repo/project-one' });
+      }
       if (path === '/api/projects') {
         return Promise.resolve({
           id: 'p1',
@@ -170,10 +181,9 @@ describe('ProjectsPage', () => {
     });
 
     render(<ProjectsPage />);
-    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Project One' } });
-    fireEvent.change(screen.getByLabelText('Slug'), { target: { value: 'project-one' } });
-    fireEvent.change(screen.getByLabelText('Repository path'), { target: { value: '/repo/project-one' } });
-    fireEvent.click(screen.getByText('Validate and create'));
+    await screen.findByLabelText('Name');
+    await chooseRepoFolder('/repo/project-one');
+    fireEvent.click(screen.getByText('Create project'));
 
     await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/api/projects', expect.objectContaining({ repo_path: '/repo/project-one' })));
     await waitFor(() => expect(apiMock.post).toHaveBeenCalledWith('/api/projects/p1/scan'));

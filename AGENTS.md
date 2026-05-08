@@ -2,6 +2,10 @@
 
 This file is for coding agents working on this repository itself. It is not a product asset template and must not be synced into user project repositories.
 
+## Repo Goal
+
+AgentOps Workspace is the operational brain for coding agents across project repositories. It centralizes agent knowledge, workflows, policies, run reports, audits, reviews, playback, and synchronization so external coding agents can work consistently, transparently, and safely across repos.
+
 AgentOps Workspace is a local/self-hosted web app with:
 
 - Backend: Go, Fiber, PostgreSQL/pgvector-ready schema in `api/`.

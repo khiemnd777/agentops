@@ -29,6 +29,9 @@ func run(ctx context.Context, args []string) error {
 		printUsage()
 		return nil
 	}
+	if args[0] == "host-bridge" {
+		return hostBridge(ctx, args[1:])
+	}
 	runtime, err := newRuntime(ctx)
 	if err != nil {
 		return err
@@ -250,5 +253,6 @@ func printUsage() {
   agentops sync files-to-db --project <id-or-slug> [--paths a,b]
   agentops sync db-to-files --project <id-or-slug> [--paths a,b]
   agentops sync reconcile --project <id-or-slug>
-  agentops report import --project <id-or-slug>`)
+  agentops report import --project <id-or-slug>
+  agentops host-bridge [--addr 127.0.0.1:17321]`)
 }

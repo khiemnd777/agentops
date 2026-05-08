@@ -15,6 +15,7 @@ type Config struct {
 	MCPToken      string
 	PublicBaseURL string
 	MCPPublicURL  string
+	HostBridgeURL string
 	RunImport     RunImportConfig
 }
 
@@ -36,6 +37,7 @@ func Load() Config {
 		MCPToken:      env("AGENTOPS_MCP_TOKEN", ""),
 		PublicBaseURL: publicBaseURL(),
 		MCPPublicURL:  mcpPublicURL(),
+		HostBridgeURL: strings.TrimRight(env("AGENTOPS_HOST_BRIDGE_URL", "http://host.docker.internal:17321"), "/"),
 		RunImport: RunImportConfig{
 			AutoImportOnReviewOpen:   true,
 			AutoImportOnTaskListOpen: true,

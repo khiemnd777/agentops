@@ -16,7 +16,7 @@ This MVP does not execute Codex or any other coding agent. PostgreSQL is the sou
 3. Start the stack:
 
 ```bash
-docker compose up --build
+make up
 ```
 
 Or with a custom repo root:
@@ -30,6 +30,7 @@ AGENTOPS_REPO_ROOT=/Users/khiem/projects docker compose up --build
    - Backend health: `http://localhost:${API_HOST_PORT}/health`
 
 The API runs migrations and seeds default assets on boot.
+`make up` and `make restart` also start the AgentOps Host Bridge after Docker is up, using `AGENTOPS_HOST_BRIDGE_PORT` from `.env`. The bridge opens the native OS folder picker for Workspace V2 project creation and returns the selected absolute path to the API.
 
 ## MVP Flow
 
